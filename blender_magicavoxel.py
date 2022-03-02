@@ -891,6 +891,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     new_object = bpy.data.objects.new('model_%s' % mesh_index, new_mesh)
                     voxel_collection.objects.link(new_object)
                     generated_mesh_models.append(new_object)
+                    # Remove duplicate vertices
+                    bpy.context.view_layer.objects.active = new_object
+                    bpy.ops.object.editmode_toggle()
+                    bpy.ops.mesh.select_all(action='SELECT')
+                    bpy.ops.mesh.remove_doubles(
+                        threshold=0.0001,
+                        use_unselected=True,
+                        use_sharp_edge_from_normals=True
+                    )
+                    bpy.ops.object.editmode_toggle()
 
                 # Translate generated meshes and associate if requested with node hierarchy
                 parent_nodes = [n for n in result.nodes.values() if n.type == "SHP" and mesh.model_id in n.meshes]
