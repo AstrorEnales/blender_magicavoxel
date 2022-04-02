@@ -3,6 +3,12 @@
 Addon for the [Blender](https://www.blender.org) 3D modeling software for
 loading [MagicaVoxel](https://ephtracy.github.io) VOX files.
 
+## Version Information
+
+**Please note:** The initial release is tested with Blender 3.0.0 and MagicaVoxel 0.99.7.0 (Beta). More in-depth tests
+with different versions will be done in the near future. If you need support for specific (older) versions, please
+feel free to create an issue with the version info.
+
 ## Installation
 
 A detailed description of how to install addons in Blender can be found in
