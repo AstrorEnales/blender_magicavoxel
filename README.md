@@ -44,9 +44,14 @@ analyzed to find the voxel hull and all other voxels inside the model are delete
 
 This addon supports different methods of representing the loaded voxel models.
 
-#### Voxel as Models (WIP)
+#### Voxel as Models
 
-TBD
+Voxel as models meshing generates a six-sided cube for each voxel as separate models. Depending on the voxel
+hull option, cubes are only generated for the hull or all voxels defined in the model.
+
+> ⚠️ Beware that this option may be slow as alot of cube models may be generated!
+
+![](img/meshing_type_voxel_as_models.png)
 
 #### Simple Cubes
 

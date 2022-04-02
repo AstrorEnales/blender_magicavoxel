@@ -847,11 +847,34 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             for z in range(0, mesh.grid.height):
                                 color_index = mesh.get_voxel_color_index(x, y, z)
                                 if color_index is not None:
-                                    p = self.get_vertex_pos((x, y, z), mesh.grid)
-                                    bpy.ops.mesh.primitive_cube_add(
-                                        size=self.voxel_size,
-                                        location=[p[0], p[1], p[2]]
-                                    )
+                                    vertices = []
+                                    faces = []
+                                    vertices.append(self.get_vertex_pos((x, y, z), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x + 1, y, z), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x, y + 1, z), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x + 1, y + 1, z), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x, y, z + 1), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x + 1, y, z + 1), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x, y + 1, z + 1), mesh.grid))
+                                    vertices.append(self.get_vertex_pos((x + 1, y + 1, z + 1), mesh.grid))
+                                    faces.append([0, 2, 3, 1])
+                                    faces.append([4, 5, 7, 6])
+                                    faces.append([0, 1, 5, 4])
+                                    faces.append([2, 6, 7, 3])
+                                    faces.append([0, 4, 6, 2])
+                                    faces.append([1, 3, 7, 5])
+                                    new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
+                                    new_mesh.from_pydata(vertices, [], faces)
+                                    new_mesh.update()
+                                    new_mesh.vertex_colors.new()
+                                    vertex_colors = new_mesh.vertex_colors[0].data
+                                    color = tuple((t / 255.0 for t in result.color_palette[color_index]))
+                                    for i in range(len(faces) * 4):
+                                        vertex_colors[i].color = color
+                                    new_object = bpy.data.objects.new("model_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z),
+                                                                      new_mesh)
+                                    voxel_collection.objects.link(new_object)
+                                    generated_mesh_models.append(new_object)
                 else:
                     if self.meshing_type == "GREEDY":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
