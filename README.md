@@ -1,15 +1,23 @@
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/AstrorEnales/blender_magicavoxel?style=flat-square)
+![GitHub](https://img.shields.io/github/license/AstrorEnales/blender_magicavoxel?style=flat-square)
+![GitHub all releases](https://img.shields.io/github/downloads/AstrorEnales/blender_magicavoxel/total?style=flat-square)
+
 # blender_magicavoxel
 
 Addon for the [Blender](https://www.blender.org) 3D modeling software for
 loading [MagicaVoxel](https://ephtracy.github.io) VOX files.
 
-## Version Information
+## 🧪️ Version Information
 
 **Please note:** The initial release is tested with Blender 3.0.0 and MagicaVoxel 0.99.7.0 (Beta). More in-depth tests
 with different versions will be done in the near future. If you need support for specific (older) versions, please
 feel free to create an issue with the version info.
 
-## Installation
+## 💾 Download
+
+The latest version can be downloaded [here](https://github.com/AstrorEnales/blender_magicavoxel/releases/latest).
+
+## 🔧 Installation
 
 A detailed description of how to install addons in Blender can be found in
 the [Blender documentation for installing addons](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons)
@@ -18,7 +26,7 @@ the [Blender documentation for installing addons](https://docs.blender.org/manua
 Go to `Edit > Preferences > Add-ons`, click on `Install`, and select `blender_magicavoxel.py`. After that, activate the
 addon.
 
-## Usage
+## ✈️ Usage
 
 Go to `File > Import > MagicaVoxel (.vox)` and select the file you want to import.
 
