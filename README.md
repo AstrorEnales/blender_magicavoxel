@@ -20,6 +20,11 @@ Go to `File > Import > MagicaVoxel (.vox)` and select the file you want to impor
 
 ![](img/import_dialog.png)
 
+### Voxel Colors
+
+Voxel colors are currently imported as vertex color data for each mesh and can be used in materials. For example,
+assign a material to the imported models for which the `Base Color` is set to `Vertex Color`.
+
 ### Import Hierarchy
 
 This options determines whether the hierarchy from MagicaVoxel is imported as empty axis objects in blender and all
