@@ -96,3 +96,12 @@ meshing [here](https://devforum.roblox.com/t/consume-everything-how-greedy-meshi
 and [here](https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/).
 
 ![](img/meshing_type_greedy.png)
+
+## Related Works / Feature Comparison
+
+| Addon                                                                                       | Active                                                                                           | Hierarchy | Materials | Cameras | Join | Voxel scale | VOX version |
+|---------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|-----------|-----------|---------|------|-------------|-------------|
+| This                                                                                        | ✅                                                                                                | ✅         | WIP       | WIP     | WIP  | ✅           | 150, 200    |
+| [technistguru/MagicaVoxel_Importer](https://github.com/technistguru/MagicaVoxel_Importer)   | ❌ [[ref]](https://github.com/technistguru/MagicaVoxel_Importer/issues/2#issuecomment-1020678306) | ✅         | ✅ (MATL)  | ❌       | ❌    | ✅           | 150         |
+| [RichysHub/MagicaVoxel-VOX-importer](https://github.com/RichysHub/MagicaVoxel-VOX-importer) | Last update 29.10.2019                                                                           | ❌         | ~ (MATT)  | ❌       | ✅    | ✅           | 150         |
+| [ldo/blender_magivox_import](https://github.com/ldo/blender_magivox_import)                 | Last update 06.07.2021                                                                           | ❌         | ~ (MATT)  | ❌       | ❌    | ❌           | 150         |
