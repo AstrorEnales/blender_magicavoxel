@@ -791,7 +791,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             self.report({"WARNING"},
                                         "Camera %s mode 'sg' is not supported, fallback to 'pers'" % camera_id)
                         camera_data.type = "PANO" if mode == "pano" else "PERSP"
-                    # TODO: '_focus': '0 0 0', '_angle': '0 0 0', '_radius': '0', '_frustum': '0.414214'
+                    # TODO: {'_focus': '0 0 0', '_angle': '0 0 0', '_radius': '0', '_frustum': '0.414214'}
                     #  (_mode : string)
                     #  (_focus : vec(3))
                     #  (_angle : vec(3))
@@ -802,7 +802,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             if self.import_materials:
                 for material_id in result.materials:
                     material = result.materials[material_id]
-                    # TODO:
+                    # TODO: {'_rough': '0.1', '_ior': '0.3', '_ri': '1.3', '_d': '0.05'}
                     #  (_type : str) _diffuse, _metal, _glass, _emit
                     #  (_weight : float) range 0 ~ 1
                     #  (_rough : float)
@@ -990,6 +990,10 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         return struct.unpack('<i', f.read(4))[0]
 
     @staticmethod
+    def read_float32(f: IO) -> int:
+        return struct.unpack('<f', f.read(4))[0]
+
+    @staticmethod
     def read_uint8(f: IO) -> int:
         return struct.unpack('B', f.read(1))[0]
 
@@ -1073,6 +1077,39 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         elif riff_id == 'MATL':
             material_id = ImportVOX.read_int32(f)
             model.materials[material_id] = ImportVOX.read_dict(f)
+            # print('MATL', material_id, model.materials[material_id])
+        elif riff_id == 'MATT':  # Legacy material
+            material_id = ImportVOX.read_int32(f)
+            # 0: diffuse, 1: metal, 2: glass, 3: emissive
+            material_type = ImportVOX.read_int32(f)
+            type_keys = ['_diffuse', '_metal', '_glass', '_emit']
+            # diffuse:   1.0
+            # metal:    (0.0 - 1.0] : blend between metal and diffuse material
+            # glass:    (0.0 - 1.0] : blend between glass and diffuse material
+            # emissive: (0.0 - 1.0] : self-illuminated material
+            material_weight = ImportVOX.read_float32(f)
+            # set if value is saved in next section
+            # bit(0) : Plastic
+            # bit(1) : Roughness
+            # bit(2) : Specular
+            # bit(3) : IOR
+            # bit(4) : Attenuation
+            # bit(5) : Power
+            # bit(6) : Glow
+            # bit(7) : isTotalPower (*no value)
+            property_bits = ImportVOX.read_int32(f)
+            # TODO: translate rest of keys
+            bit_keys = ['_plastic', '_rough', '_spec', '_ior', '_att', 'power', 'glow', 'isTotalPower']
+            # TODO: normalized property value: (0.0 - 1.0], need to map to real range
+            property_values = {bit_keys[i]: 1 if i == 7 else ImportVOX.read_float32(f) for i in range(8) if
+                               (1 << i) & property_bits != 0}
+            property_values['_weight'] = material_weight
+            if 0 <= material_type < len(type_keys):
+                property_values['_type'] = type_keys[material_type]
+            else:
+                property_values['_type'] = type_keys[0]
+            model.materials[material_id] = property_values
+            # print('MATT', material_id, model.materials[material_id])
         elif riff_id == 'LAYR':
             layer_id = ImportVOX.read_int32(f)
             model.layers[layer_id] = ImportVOX.read_dict(f)
@@ -1090,9 +1127,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     custom_palette.append(color)
             model.color_palette = custom_palette
         elif riff_id == 'IMAP':
-            pass  # not implemented
+            _ = {i + 1: ImportVOX.read_int32(f) for i in range(256)}  # palette_index_map
+            # TODO
         elif riff_id == 'NOTE':
-            pass  # not implemented
+            num_color_names = ImportVOX.read_int32(f)
+            _ = [ImportVOX.read_string(f) for _ in range(num_color_names)]  # color_names
+            # TODO
         # Skip unknown data
         if current_position + content_byte_length > f.tell():
             f.seek(current_position + content_byte_length)
