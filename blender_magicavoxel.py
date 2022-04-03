@@ -675,6 +675,7 @@ class VoxModel:
         self.version = version
         self.next_model_id: int = 0
         self.color_palette = [x for x in DEFAULT_PALETTE]
+        self.color_palette_lookup: Dict[int, int] = {i: i for i in range(256)}
         self.materials: Dict[int, Dict[str, str]] = {}
         self.layers: Dict[int, Dict[str, str]] = {}
         self.cameras: Dict[int, Dict[str, str]] = {}
@@ -682,6 +683,12 @@ class VoxModel:
         self.meshes: List[VoxMesh] = []
         self.nodes: Dict[int, VoxNode] = {}
         self.node_parent_relations: Dict[int, int] = {}
+
+    def get_color(self, color_index: int) -> Tuple[float, float, float, float]:
+        # Map color index using IMAP
+        color_index = self.color_palette_lookup[color_index]
+        color = self.color_palette[color_index]
+        return color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3] / 255.0
 
 
 def voxels_as_cubes_on_update(self, _context):
@@ -868,7 +875,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     new_mesh.update()
                                     new_mesh.vertex_colors.new()
                                     vertex_colors = new_mesh.vertex_colors[0].data
-                                    color = tuple((t / 255.0 for t in result.color_palette[color_index]))
+                                    color = result.get_color(color_index)
                                     for i in range(len(faces) * 4):
                                         vertex_colors[i].color = color
                                     new_object = bpy.data.objects.new("model_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z),
@@ -906,7 +913,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     vertex_colors = new_mesh.vertex_colors[0].data
                     for i in range(len(quads)):
                         vertex_offset = i * 4
-                        color = tuple((t / 255.0 for t in result.color_palette[quads[i].color]))
+                        color = result.get_color(quads[i].color)
                         vertex_colors[vertex_offset].color = color
                         vertex_colors[vertex_offset + 1].color = color
                         vertex_colors[vertex_offset + 2].color = color
@@ -1113,9 +1120,10 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         elif riff_id == 'LAYR':
             layer_id = ImportVOX.read_int32(f)
             model.layers[layer_id] = ImportVOX.read_dict(f)
+            _ = ImportVOX.read_int32(f)  # reserved id, must be -1
         elif riff_id == 'RGBA':
             custom_palette: List[Tuple[int, int, int, int]] = [(0, 0, 0, 255)]
-            for i in range(0, 256):
+            for i in range(256):
                 r = ImportVOX.read_uint8(f)
                 g = ImportVOX.read_uint8(f)
                 b = ImportVOX.read_uint8(f)
@@ -1127,8 +1135,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     custom_palette.append(color)
             model.color_palette = custom_palette
         elif riff_id == 'IMAP':
-            _ = {i + 1: ImportVOX.read_int32(f) for i in range(256)}  # palette_index_map
-            # TODO
+            _ = {ImportVOX.read_uint8(f): (i + 1) % 256 for i in range(256)}  # model.color_palette_lookup
+            # TODO: IMAP seems to collide with custom palette. Needs further investigation
         elif riff_id == 'NOTE':
             num_color_names = ImportVOX.read_int32(f)
             _ = [ImportVOX.read_string(f) for _ in range(num_color_names)]  # color_names
