@@ -743,7 +743,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             ("GREEDY", "Greedy", "Outside facing Voxel faces greedy optimized in one mesh")
         ],
         description="",
-        default="GREEDY"
+        default="SIMPLE_QUADS"
     )
 
     voxel_hull: BoolProperty(
