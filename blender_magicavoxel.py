@@ -309,11 +309,11 @@ class VoxelGrid:
 
 class Quad:
     def __init__(self,
-                 p1: Tuple[float, float, float] = (0, 0, 0),
-                 p2: Tuple[float, float, float] = (0, 0, 0),
-                 p3: Tuple[float, float, float] = (0, 0, 0),
-                 p4: Tuple[float, float, float] = (0, 0, 0),
-                 normal: Tuple[float, float, float] = (0, 0, 0),
+                 p1: Tuple[int, int, int] = (0, 0, 0),
+                 p2: Tuple[int, int, int] = (0, 0, 0),
+                 p3: Tuple[int, int, int] = (0, 0, 0),
+                 p4: Tuple[int, int, int] = (0, 0, 0),
+                 normal: Tuple[int, int, int] = (0, 0, 0),
                  color: int = 0
                  ):
         self.p1 = p1
@@ -624,6 +624,7 @@ class VoxNode:
         self.node_attributes: Dict[str, str] = {}
         self.frame_attributes: Dict[int, Dict[str, str]] = {}
         self.meshes: Dict[int, Dict[str, str]] = {}
+        self.child_ids = []
 
     def get_transform(self, frame: int):
         matching_attributes_by_frame_key = [
@@ -682,7 +683,6 @@ class VoxModel:
         self.rendering_attributes: List[Dict[str, str]] = []
         self.meshes: List[VoxMesh] = []
         self.nodes: Dict[int, VoxNode] = {}
-        self.node_parent_relations: Dict[int, int] = {}
 
     def get_color(self, color_index: int) -> Tuple[float, float, float, float]:
         # Map color index using IMAP
@@ -785,7 +785,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             active_collection = view_layer.active_layer_collection.collection
             voxel_collection = context.blend_data.collections.new(name=collection_name)
             active_collection.children.link(voxel_collection)
-            # context.view_layer.active_layer_collection = voxel_collection
             if self.import_cameras:
                 for camera_id in result.cameras:
                     camera = result.cameras[camera_id]
@@ -794,17 +793,36 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         camera_data.angle = math.radians(float(camera["_fov"]))
                     if "_mode" in camera:
                         mode = camera["_mode"]
+                        blender_modes = {
+                            'pers': 'PERSP',
+                            'pano': 'PANO',
+                            'orth': 'ORTHO',
+                            'sg': 'PERSP',  # TODO
+                            'iso': 'ORTHO'  # TODO
+                        }
                         if mode == "sg":
                             self.report({"WARNING"},
                                         "Camera %s mode 'sg' is not supported, fallback to 'pers'" % camera_id)
-                        camera_data.type = "PANO" if mode == "pano" else "PERSP"
-                    # TODO: {'_focus': '0 0 0', '_angle': '0 0 0', '_radius': '0', '_frustum': '0.414214'}
-                    #  (_mode : string)
-                    #  (_focus : vec(3))
-                    #  (_angle : vec(3))
-                    #  (_radius : int)
-                    #  (_frustum : float)
+                        camera_data.type = blender_modes[mode] if mode in blender_modes else "PERSP"
                     camera_object = bpy.data.objects.new("camera_%s" % camera_id, camera_data)
+                    rotation = mathutils.Vector((0, 0, 0))
+                    target = mathutils.Vector((0, 0, 0))
+                    radius = 1
+                    # Camera orientation: pitch, yaw, roll
+                    if "_angle" in camera:
+                        pitch, yaw, roll = (math.radians(float(x.strip())) for x in camera["_angle"].split(" "))
+                        rotation = mathutils.Vector((yaw, roll, pitch))
+                    # Camera target
+                    if "_focus" in camera:
+                        target = mathutils.Vector((float(x.strip()) for x in camera["_focus"].split(" ")))
+                    if "_radius" in camera:
+                        radius = float(camera["_radius"])
+                    camera_object.rotation_euler = rotation
+                    rotation_matrix = mathutils.Euler(rotation).to_matrix()
+                    rotation_matrix.resize_4x4()
+                    radius = 40
+                    camera_object.location = target - (rotation_matrix @ mathutils.Matrix.Translation(mathutils.Vector((0, radius, 0)))).to_translation()
+                    # TODO: {'_frustum': '0.414214'}
                     voxel_collection.objects.link(camera_object)
             if self.import_materials:
                 for material_id in result.materials:
@@ -818,29 +836,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     #  (_att : float)
                     #  (_flux : float)
                     #  (_plastic)
-            node_id_empty_lookup = {}
-            if self.import_hierarchy:
-                for node_id in result.nodes:
-                    node = result.nodes[node_id]
-                    if node.type == "GRP":
-                        transform_node = result.nodes[result.node_parent_relations[node_id]]
-                        # TODO: frame
-                        translation = transform_node.get_transform_translation(0, self.voxel_size)
-                        rotation = transform_node.get_transform_rotation(0)
-                        group_data = bpy.data.objects.new("grp_%s" % node_id, None)
-                        group_data.empty_display_size = 1
-                        group_data.empty_display_type = 'PLAIN_AXES'
-                        group_data.matrix_local = translation @ rotation
-                        voxel_collection.objects.link(group_data)
-                        node_id_empty_lookup[node_id] = group_data
-                for node_id in node_id_empty_lookup:
-                    current_node_id = node_id
-                    while current_node_id in result.node_parent_relations:
-                        current_node_id = result.node_parent_relations[current_node_id]
-                        next_node = result.nodes[current_node_id]
-                        if next_node.type == "GRP":
-                            node_id_empty_lookup[node_id].parent = node_id_empty_lookup[next_node.node_id]
-                            break
+            model_id_object_lookup = {}
             mesh_index = -1
             for mesh in result.meshes:
                 generated_mesh_models = []
@@ -896,16 +892,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     else:
                         self.report({"WARNING"}, "Unknown meshing type %s" % self.meshing_type)
                         quads = []
-                    vertices = []
+                    vertices_map: Dict[Tuple[int, int, int], int] = {}
+                    vertices: List[Tuple[float, float, float]] = []
                     faces = []
-                    offset = 0
                     for quad in quads:
-                        vertices.append(self.get_vertex_pos(quad.p1, mesh.grid))
-                        vertices.append(self.get_vertex_pos(quad.p2, mesh.grid))
-                        vertices.append(self.get_vertex_pos(quad.p3, mesh.grid))
-                        vertices.append(self.get_vertex_pos(quad.p4, mesh.grid))
-                        faces.append([offset, offset + 1, offset + 2, offset + 3])
-                        offset += 4
+                        faces.append([
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p1, mesh),
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p2, mesh),
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p3, mesh),
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p4, mesh)
+                        ])
                     new_mesh = bpy.data.meshes.new("mesh_%s" % mesh_index)
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
@@ -918,56 +914,72 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         vertex_colors[vertex_offset + 1].color = color
                         vertex_colors[vertex_offset + 2].color = color
                         vertex_colors[vertex_offset + 3].color = color
-                    new_object = bpy.data.objects.new('model_%s' % mesh_index, new_mesh)
-                    voxel_collection.objects.link(new_object)
+                    new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
                     generated_mesh_models.append(new_object)
-                    # Remove duplicate vertices
-                    bpy.context.view_layer.objects.active = new_object
-                    bpy.ops.object.editmode_toggle()
-                    bpy.ops.mesh.select_all(action='SELECT')
-                    bpy.ops.mesh.remove_doubles(
-                        threshold=0.0001,
-                        use_unselected=True,
-                        use_sharp_edge_from_normals=True
-                    )
-                    bpy.ops.object.editmode_toggle()
+                model_id_object_lookup[mesh_index] = generated_mesh_models
 
-                # Translate generated meshes and associate if requested with node hierarchy
-                parent_nodes = [n for n in result.nodes.values() if n.type == "SHP" and mesh.model_id in n.meshes]
-                if len(parent_nodes) > 0:
-                    parent_node = parent_nodes[0]
+            # Translate generated meshes and associate if requested with node hierarchy
+            self.recurse_hierarchy(voxel_collection, result.nodes, result.nodes[0], [], [], model_id_object_lookup)
+            # Remove original objects as the hierarchy creates copies
+            for model_objects in model_id_object_lookup.values():
+                for model_object in model_objects:
+                    bpy.data.objects.remove(model_object)
+
+        return {"CANCELLED"} if result is None else {'FINISHED'}
+
+    def get_or_create_vertex(self, vertices_map: Dict[Tuple[int, int, int], int],
+                             vertices: List[Tuple[float, float, float]], vertex: Tuple[int, int, int],
+                             mesh: VoxMesh) -> int:
+        if vertex in vertices_map:
+            return vertices_map[vertex]
+        vertices.append(self.get_vertex_pos(vertex, mesh.grid))
+        vertices_map[vertex] = len(vertices) - 1
+        return len(vertices) - 1
+
+    def recurse_hierarchy(self, voxel_collection, nodes: Dict[int, VoxNode], node: VoxNode, path, path_objects,
+                          model_id_object_lookup: Dict):
+        next_path = path + [node.node_id]
+        next_path_objects = list(path_objects)
+        if node.type == 'GRP':
+            if self.import_hierarchy:
+                transform_node = nodes[path[-1]]
+                # TODO: frame
+                translation = transform_node.get_transform_translation(0, self.voxel_size)
+                rotation = transform_node.get_transform_rotation(0)
+                group_data = bpy.data.objects.new("grp_%s" % node.node_id, None)
+                group_data.empty_display_size = 1
+                group_data.empty_display_type = 'PLAIN_AXES'
+                group_data.matrix_local = translation @ rotation
+                voxel_collection.objects.link(group_data)
+                next_path_objects.append(group_data)
+                if len(path_objects) > 0:
+                    group_data.parent = path_objects[-1]
+        elif node.type == 'SHP':
+            for model_id in node.meshes:
+                shape_objects = [x.copy() for x in model_id_object_lookup[model_id]]
+                for shape_object in shape_objects:
+                    voxel_collection.objects.link(shape_object)
+                    shape_object.name = 'model_%s' % model_id
                     if self.import_hierarchy:
-                        current_node_id = parent_node.node_id
-                        while current_node_id in result.node_parent_relations:
-                            current_node_id = result.node_parent_relations[current_node_id]
-                            next_node = result.nodes[current_node_id]
-                            if next_node.type == "GRP":
-                                for generated_mesh_model in generated_mesh_models:
-                                    generated_mesh_model.parent = node_id_empty_lookup[next_node.node_id]
-                                break
-                    mesh_attributes = parent_node.meshes[mesh.model_id]
+                        shape_object.parent = next_path_objects[-1]
+                    mesh_attributes = node.meshes[model_id]
                     mesh_frame = mesh_attributes["_f"] if "_f" in mesh_attributes else 0
-                    current_node_id = parent_node.node_id
-                    while current_node_id in result.node_parent_relations:
-                        current_node_id = result.node_parent_relations[current_node_id]
-                        next_node = result.nodes[current_node_id]
+                    for i in range(len(path) - 1, 0, -1):
+                        next_node = nodes[path[i]]
                         if next_node.type == 'TRN':
                             translation = next_node.get_transform_translation(mesh_frame, self.voxel_size)
                             rotation = next_node.get_transform_rotation(mesh_frame)
-                            for generated_mesh_model in generated_mesh_models:
-                                if self.import_hierarchy:
-                                    generated_mesh_model.matrix_local = translation @ rotation
-                                else:
-                                    matrix_world = generated_mesh_model.matrix_world
-                                    matrix_world = translation @ rotation @ matrix_world
-                                    generated_mesh_model.matrix_world = matrix_world
                             if self.import_hierarchy:
+                                shape_object.matrix_local = translation @ rotation
                                 # If we import the hierarchy, we only need to apply the
                                 # nearest transform node as all other transforms are applied
                                 # by the object parent hierarchy
                                 break
-
-        return {"CANCELLED"} if result is None else {'FINISHED'}
+                            else:
+                                shape_object.matrix_world = translation @ rotation @ shape_object.matrix_world
+        for child_id in node.child_ids:
+            self.recurse_hierarchy(voxel_collection, nodes, nodes[child_id], next_path, next_path_objects,
+                                   model_id_object_lookup)
 
     def get_vertex_pos(self, p: Tuple[float, float, float], grid: VoxelGrid) -> Tuple[float, float, float]:
         return (
@@ -1054,12 +1066,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             node.node_id = ImportVOX.read_int32(f)
             node.node_attributes = ImportVOX.read_dict(f)
             child_node_id = ImportVOX.read_int32(f)
+            node.child_ids.append(child_node_id)
             ImportVOX.read_int32(f)  # reserved id, must be -1
             node.layer_id = ImportVOX.read_int32(f)
             num_frames = ImportVOX.read_int32(f)
             node.frame_attributes = {i: ImportVOX.read_dict(f) for i in range(0, num_frames)}
             model.nodes[node.node_id] = node
-            model.node_parent_relations[child_node_id] = node.node_id
         elif riff_id == 'nGRP':
             node = VoxNode()
             node.type = "GRP"
@@ -1068,7 +1080,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             num_child_ids = ImportVOX.read_int32(f)
             for i in range(0, num_child_ids):
                 child_node_id = ImportVOX.read_int32(f)
-                model.node_parent_relations[child_node_id] = node.node_id
+                node.child_ids.append(child_node_id)
             model.nodes[node.node_id] = node
         elif riff_id == 'nSHP':
             node = VoxNode()
