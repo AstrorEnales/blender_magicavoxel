@@ -1,6 +1,6 @@
 # Changelog
 
-## [v1.1.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.1.0)
+## [v1.1.1](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.1.1)
 
   * **[fix]** Fix transform rotation matrix parsing
   * **[change]** Change default meshing mode to `SIMPLE_QUADS` as it is probably more usable in most circumstances
