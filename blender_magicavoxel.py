@@ -660,9 +660,9 @@ class VoxNode:
             third_row_index.remove(first_row_index)
             third_row_index.remove(second_row_index)
             third_row_index = third_row_index[0]
-            first_row_sign = (rotation_byte >> 3) & 1
-            second_row_sign = (rotation_byte >> 4) & 1
-            third_row_sign = (rotation_byte >> 5) & 1
+            first_row_sign = (rotation_byte >> 4) & 1
+            second_row_sign = (rotation_byte >> 5) & 1
+            third_row_sign = (rotation_byte >> 6) & 1
             rotation.zero()
             rotation[0][first_row_index] = 1 if first_row_sign == 0 else -1
             rotation[1][second_row_index] = 1 if second_row_sign == 0 else -1
