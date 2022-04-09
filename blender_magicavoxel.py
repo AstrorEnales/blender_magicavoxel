@@ -721,12 +721,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=False,
     )
 
-    import_materials: BoolProperty(
-        name="Import Materials",
-        description="Import material definitions from MagicaVoxel",
-        default=False,
-    )
-
     import_hierarchy: BoolProperty(
         name="Import Hierarchy",
         description="Import hierarchy from MagicaVoxel as collections",
@@ -739,6 +733,18 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         min=0.0001,
         soft_min=0.0001,
         default=1.0,
+    )
+
+    material_mode: EnumProperty(
+        name="Material Mode",
+        items=[
+            ("NONE", "Ignore", "Neither colors nor materials are imported"),
+            ("VERTEX_COLORS", "Vertex Colors Only", "Voxel colors are assigned to face vertex colors"),
+            # ("MAT_PER_COLOR", "Material Per Color", "TODO"),
+            # ("MAT_AS_TEX", "Materials As Texture", "TODO")
+        ],
+        description="",
+        default="VERTEX_COLORS"
     )
 
     meshing_type: EnumProperty(
@@ -770,7 +776,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             ignore=(
                 "filter_glob",
                 "import_cameras",
-                "import_materials",
+                "material_mode",
                 "voxel_size",
                 "voxel_hull",
                 "meshing_type",
@@ -824,18 +830,21 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     camera_object.location = target - (rotation_matrix @ mathutils.Matrix.Translation(mathutils.Vector((0, radius, 0)))).to_translation()
                     # TODO: {'_frustum': '0.414214'}
                     voxel_collection.objects.link(camera_object)
-            if self.import_materials:
-                for material_id in result.materials:
-                    material = result.materials[material_id]
-                    # TODO: {'_rough': '0.1', '_ior': '0.3', '_ri': '1.3', '_d': '0.05'}
-                    #  (_type : str) _diffuse, _metal, _glass, _emit
-                    #  (_weight : float) range 0 ~ 1
-                    #  (_rough : float)
-                    #  (_spec : float)
-                    #  (_ior : float)
-                    #  (_att : float)
-                    #  (_flux : float)
-                    #  (_plastic)
+            if self.material_mode != "NONE":
+                if self.material_mode == "VERTEX_COLORS":
+                    pass
+                else:
+                    for material_id in result.materials:
+                        material = result.materials[material_id]
+                        # TODO: {'_rough': '0.1', '_ior': '0.3', '_ri': '1.3', '_d': '0.05'}
+                        #  (_type : str) _diffuse, _metal, _glass, _emit
+                        #  (_weight : float) range 0 ~ 1
+                        #  (_rough : float)
+                        #  (_spec : float)
+                        #  (_ior : float)
+                        #  (_att : float)
+                        #  (_flux : float)
+                        #  (_plastic)
             model_id_object_lookup = {}
             mesh_index = -1
             for mesh in result.meshes:
@@ -869,11 +878,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
                                     new_mesh.from_pydata(vertices, [], faces)
                                     new_mesh.update()
-                                    new_mesh.vertex_colors.new()
-                                    vertex_colors = new_mesh.vertex_colors[0].data
-                                    color = result.get_color(color_index)
-                                    for i in range(len(faces) * 4):
-                                        vertex_colors[i].color = color
+                                    if self.material_mode == "VERTEX_COLORS":
+                                        new_mesh.vertex_colors.new()
+                                        vertex_colors = new_mesh.vertex_colors[0].data
+                                        color = result.get_color(color_index)
+                                        for i in range(len(faces) * 4):
+                                            vertex_colors[i].color = color
                                     new_object = bpy.data.objects.new("model_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z),
                                                                       new_mesh)
                                     voxel_collection.objects.link(new_object)
@@ -905,15 +915,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     new_mesh = bpy.data.meshes.new("mesh_%s" % mesh_index)
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
-                    new_mesh.vertex_colors.new()
-                    vertex_colors = new_mesh.vertex_colors[0].data
-                    for i in range(len(quads)):
-                        vertex_offset = i * 4
-                        color = result.get_color(quads[i].color)
-                        vertex_colors[vertex_offset].color = color
-                        vertex_colors[vertex_offset + 1].color = color
-                        vertex_colors[vertex_offset + 2].color = color
-                        vertex_colors[vertex_offset + 3].color = color
+                    if self.material_mode == "VERTEX_COLORS":
+                        new_mesh.vertex_colors.new()
+                        vertex_colors = new_mesh.vertex_colors[0].data
+                        for i in range(len(quads)):
+                            vertex_offset = i * 4
+                            color = result.get_color(quads[i].color)
+                            vertex_colors[vertex_offset].color = color
+                            vertex_colors[vertex_offset + 1].color = color
+                            vertex_colors[vertex_offset + 2].color = color
+                            vertex_colors[vertex_offset + 3].color = color
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
                     generated_mesh_models.append(new_object)
                 model_id_object_lookup[mesh_index] = generated_mesh_models
@@ -1161,32 +1172,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         pass
 
 
-class VOX_PT_import_include(bpy.types.Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "Include"
-    bl_parent_id = "FILE_PT_operator"
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == "IMPORT_SCENE_OT_vox"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        # layout.prop(operator, "import_cameras")
-        # layout.prop(operator, "import_materials")
-        layout.prop(operator, "import_hierarchy")
-
-
 class VOX_PT_import_geometry(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -1208,11 +1193,61 @@ class VOX_PT_import_geometry(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
+        layout.prop(operator, "import_hierarchy")
+
         layout.prop(operator, "voxel_size")
-        # layout.row().prop(operator, "merge_models")
+        # TODO layout.row().prop(operator, "merge_models")
         layout.row().prop(operator, "meshing_type")
         if operator.meshing_type in ["CUBES_AS_OBJ", "SIMPLE_CUBES"]:
             layout.row().prop(operator, "voxel_hull")
+
+
+class VOX_PT_import_materials(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Materials"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "IMPORT_SCENE_OT_vox"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.row().prop(operator, "material_mode")
+
+
+class VOX_PT_import_cameras(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Cameras"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "IMPORT_SCENE_OT_vox"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(operator, "import_cameras")
 
 
 def menu_func_import(self, _context):
@@ -1221,8 +1256,9 @@ def menu_func_import(self, _context):
 
 classes = (
     ImportVOX,
-    VOX_PT_import_include,
     VOX_PT_import_geometry,
+    VOX_PT_import_materials,
+    # TODO VOX_PT_import_cameras,
 )
 
 
