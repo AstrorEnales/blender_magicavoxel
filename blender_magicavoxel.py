@@ -738,8 +738,13 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     material_mode: EnumProperty(
         name="Material Mode",
         items=[
-            ("NONE", "Ignore", "Neither colors nor materials are imported"),
-            ("VERTEX_COLORS", "Vertex Colors Only", "Voxel colors are assigned to face vertex colors"),
+            ("NONE", "Ignore", "Neither colors nor materials are imported."),
+            ("VERTEX_COLORS", "Vertex Colors Only", "Only the color palette will be imported and assigned to face " +
+             "vertex colors. A simple material is added using the vertex " +
+             "colors as 'Base Color'."),
+            ("VERTEX_COLORS_EXT", "Vertex Colors Extended", "The color palette and certain material properties " +
+             "are assigned as vertex color layers. A simple material " +
+             "is added using the vertex color layers."),
             # ("MAT_PER_COLOR", "Material Per Color", "TODO"),
             # ("MAT_AS_TEX", "Materials As Texture", "TODO")
         ],
@@ -827,12 +832,31 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     rotation_matrix = mathutils.Euler(rotation).to_matrix()
                     rotation_matrix.resize_4x4()
                     radius = 40
-                    camera_object.location = target - (rotation_matrix @ mathutils.Matrix.Translation(mathutils.Vector((0, radius, 0)))).to_translation()
+                    camera_object.location = target - (rotation_matrix @ mathutils.Matrix.Translation(
+                        mathutils.Vector((0, radius, 0)))).to_translation()
                     # TODO: {'_frustum': '0.414214'}
                     voxel_collection.objects.link(camera_object)
+            materials = []
             if self.material_mode != "NONE":
-                if self.material_mode == "VERTEX_COLORS":
-                    pass
+                if self.material_mode == "VERTEX_COLORS" or self.material_mode == "VERTEX_COLORS_EXT":
+                    vertex_color_mat = bpy.data.materials.new(name=collection_name + " Material")
+                    vertex_color_mat.use_nodes = True
+                    nodes = vertex_color_mat.node_tree.nodes
+                    links = vertex_color_mat.node_tree.links
+                    bdsf_node = nodes["Principled BSDF"]
+                    vertex_color_node = nodes.new("ShaderNodeVertexColor")
+                    vertex_color_node.layer_name = "Col"
+                    if self.material_mode == "VERTEX_COLORS_EXT":
+                        vertex_color_material_node = nodes.new("ShaderNodeVertexColor")
+                        vertex_color_material_node.layer_name = "Mat"
+                        separate_rgb_node = nodes.new("ShaderNodeSeparateRGB")
+                        links.new(vertex_color_material_node.outputs["Color"], separate_rgb_node.inputs["Image"])
+                        links.new(separate_rgb_node.outputs["R"], bdsf_node.inputs["Roughness"])
+                        links.new(separate_rgb_node.outputs["G"], bdsf_node.inputs["Metallic"])
+                        links.new(separate_rgb_node.outputs["B"], bdsf_node.inputs["IOR"])
+                    links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Base Color"])
+                    links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Emission"])
+                    materials.append(vertex_color_mat)
                 else:
                     for material_id in result.materials:
                         material = result.materials[material_id]
@@ -878,7 +902,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
                                     new_mesh.from_pydata(vertices, [], faces)
                                     new_mesh.update()
-                                    if self.material_mode == "VERTEX_COLORS":
+                                    if self.material_mode == "VERTEX_COLORS" or \
+                                            self.material_mode == "VERTEX_COLORS_EXT":
                                         new_mesh.vertex_colors.new()
                                         vertex_colors = new_mesh.vertex_colors[0].data
                                         color = result.get_color(color_index)
@@ -915,9 +940,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     new_mesh = bpy.data.meshes.new("mesh_%s" % mesh_index)
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
-                    if self.material_mode == "VERTEX_COLORS":
+                    if self.material_mode == "VERTEX_COLORS" or self.material_mode == "VERTEX_COLORS_EXT":
                         new_mesh.vertex_colors.new()
                         vertex_colors = new_mesh.vertex_colors[0].data
+                        vertex_colors_mat = None
+                        if self.material_mode == "VERTEX_COLORS_EXT":
+                            new_mesh.vertex_colors.new()
+                            new_mesh.vertex_colors[1].name = "Mat"
+                            vertex_colors_mat = new_mesh.vertex_colors[1].data
                         for i in range(len(quads)):
                             vertex_offset = i * 4
                             color = result.get_color(quads[i].color)
@@ -925,7 +955,23 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             vertex_colors[vertex_offset + 1].color = color
                             vertex_colors[vertex_offset + 2].color = color
                             vertex_colors[vertex_offset + 3].color = color
+                            if vertex_colors_mat is not None:
+                                material = result.materials[quads[i].color]
+                                # TODO: improve
+                                is_metal = "_type" in material and material["_type"] == "_metal" or "_metal" in material
+                                mat_color = (
+                                    float(material["_rough"]) if "_rough" in material else 0.5,
+                                    ((float(material["_weight"]) if "_weight" in material else 1) if is_metal else 0),
+                                    float(material["_ior"]) if "_ior" in material else 1.45,
+                                    0
+                                )
+                                vertex_colors_mat[vertex_offset].color = mat_color
+                                vertex_colors_mat[vertex_offset + 1].color = mat_color
+                                vertex_colors_mat[vertex_offset + 2].color = mat_color
+                                vertex_colors_mat[vertex_offset + 3].color = mat_color
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
+                    if self.material_mode == "VERTEX_COLORS" or self.material_mode == "VERTEX_COLORS_EXT":
+                        new_object.data.materials.append(materials[0])
                     generated_mesh_models.append(new_object)
                 model_id_object_lookup[mesh_index] = generated_mesh_models
 
