@@ -53,11 +53,15 @@ from bpy_extras.io_utils import (
 
 bl_info = {
     "name": "MagicaVoxel VOX format",
+    "author": "AstrorEnales",
     "version": (1, 1, 1),
     "blender": (3, 0, 0),
     "location": "File > Import-Export",
     "description": "Importer for MagicaVoxel VOX files",
     "category": "Import-Export",
+    "doc_url": "https://github.com/AstrorEnales/blender_magicavoxel",
+    "tracker_url": "https://github.com/AstrorEnales/blender_magicavoxel/issues",
+    "support": "COMMUNITY",
 }
 
 
