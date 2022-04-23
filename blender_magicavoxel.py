@@ -54,7 +54,7 @@ from bpy_extras.io_utils import (
 bl_info = {
     "name": "MagicaVoxel VOX format",
     "author": "AstrorEnales",
-    "version": (1, 1, 1),
+    "version": (1, 2, 0),
     "blender": (3, 0, 0),
     "location": "File > Import-Export",
     "description": "Importer for MagicaVoxel VOX files",
@@ -761,7 +761,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
              "vertex colors. A simple material is added using the vertex colors as 'Base Color'."),
             ("VERTEX_COLOR_PROP", "Vertex Color + Prop", "The color palette and certain material properties " +
              "are assigned as vertex color layers. A simple material is added using the vertex color layers."),
-            ("MAT_PER_COLOR", "Material Per Color", "A material is added per color in the color palette and assigned" +
+            ("MAT_PER_COLOR", "Material Per Color", "A material is added per color in the color palette and assigned " +
              "to the faces material index."),
             ("MAT_PER_COLOR_PROP", "Material Per Color + Prop", "A material is added per color in the color palette " +
              "and assigned to the faces material index. Additional material properties are stored for each material."),

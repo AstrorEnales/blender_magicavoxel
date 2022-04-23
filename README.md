@@ -34,11 +34,6 @@ Go to `File > Import > MagicaVoxel (.vox)` and select the file you want to impor
 
 ![](img/import_dialog.png)
 
-### Voxel Colors
-
-Voxel colors are currently imported as vertex color data for each mesh and can be used in materials. For example,
-assign a material to the imported models for which the `Base Color` is set to `Vertex Color`.
-
 ### Import Hierarchy
 
 This options determines whether the hierarchy from MagicaVoxel is imported as empty axis objects in blender and all
@@ -53,6 +48,23 @@ The voxel size parameter can be used to define the unit voxel size. The example 
 voxel size 1.0, 1.5, and 2.0.
 
 ![](img/voxel_size.png)
+
+### Material Modes
+
+MagicaVoxel files contain a color palette and additional material properties per color in the palette. This addon
+supports different modes how this information is imported.
+
+> ⚠️ Please note: Additional material props are still experimental and under development
+
+| Mode                        | Description                                                                                                                                               |
+|-----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Ignore                      | Neither colors nor materials are imported.                                                                                                                |
+| Vertex Color                | Only the color palette will be imported and assigned to face vertex colors. A simple material is added using the vertex colors as 'Base Color'.           |
+| Vertex Color + Prop         | The color palette and certain material properties are assigned as vertex color layers. A simple material is added using the vertex color layers.          |
+| Material Per Color          | A material is added per color in the color palette and assigned to the faces material index.                                                              |
+| Material Per Color + Prop   | A material is added per color in the color palette and assigned to the faces material index. Additional material properties are stored for each material. |
+| Materials As Texture        | The color palette is created as a 256x1 texture. A simple material is added using this texture.                                                           |
+| Materials As Texture + Prop | The color palette and certain material properties are created as a 256x1 texture. A simple material is added using these textures.                        |
 
 ### Voxel Hull
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.2.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.0)
+
+  * **[feature]** Implemented different material modes
+  * **[change]** Vertex color material mode now automatically assigns a material
+
 ## [v1.1.1](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.1.1)
 
   * **[fix]** Fix transform rotation matrix parsing
