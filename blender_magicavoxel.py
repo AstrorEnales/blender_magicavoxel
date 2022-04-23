@@ -697,7 +697,6 @@ class VoxModel:
         self.version = version
         self.next_model_id: int = 0
         self.color_palette = [x for x in DEFAULT_PALETTE]
-        self.color_palette_lookup: Dict[int, int] = {i: i for i in range(256)}
         self.materials: Dict[int, VoxMaterial] = {}
         self.layers: Dict[int, Dict[str, str]] = {}
         self.cameras: Dict[int, Dict[str, str]] = {}
@@ -706,8 +705,6 @@ class VoxModel:
         self.nodes: Dict[int, VoxNode] = {}
 
     def get_color(self, color_index: int) -> Tuple[float, float, float, float]:
-        # Map color index using IMAP
-        color_index = self.color_palette_lookup[color_index]
         color = self.color_palette[color_index]
         return color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3] / 255.0
 
@@ -1149,127 +1146,179 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         }
 
     @staticmethod
+    def read_pack_chunk(f: IO, _: VoxModel):
+        ImportVOX.read_int32(f)  # num_models, ignored
+
+    @staticmethod
+    def read_size_chunk(f: IO, model: VoxModel):
+        # width, depth, height
+        mesh = VoxMesh(model.next_model_id, ImportVOX.read_int32(f), ImportVOX.read_int32(f), ImportVOX.read_int32(f))
+        model.next_model_id += 1
+        model.meshes.append(mesh)
+
+    @staticmethod
+    def read_xyzi_chunk(f: IO, model: VoxModel):
+        num_voxels = ImportVOX.read_int32(f)
+        for i in range(0, num_voxels):
+            model.meshes[-1].set_voxel_color_index(
+                ImportVOX.read_uint8(f),
+                ImportVOX.read_uint8(f),
+                ImportVOX.read_uint8(f),
+                ImportVOX.read_uint8(f)
+            )
+
+    @staticmethod
+    def read_rcam_chunk(f: IO, model: VoxModel):
+        camera_id = ImportVOX.read_int32(f)
+        model.cameras[camera_id] = ImportVOX.read_dict(f)
+
+    @staticmethod
+    def read_robj_chunk(f: IO, model: VoxModel):
+        model.rendering_attributes.append(ImportVOX.read_dict(f))
+
+    @staticmethod
+    def read_ntrn_chunk(f: IO, model: VoxModel):
+        node = VoxNode()
+        node.type = "TRN"
+        node.node_id = ImportVOX.read_int32(f)
+        node.node_attributes = ImportVOX.read_dict(f)
+        child_node_id = ImportVOX.read_int32(f)
+        node.child_ids.append(child_node_id)
+        ImportVOX.read_int32(f)  # reserved id, must be -1
+        node.layer_id = ImportVOX.read_int32(f)
+        num_frames = ImportVOX.read_int32(f)
+        node.frame_attributes = {i: ImportVOX.read_dict(f) for i in range(0, num_frames)}
+        model.nodes[node.node_id] = node
+
+    @staticmethod
+    def read_ngrp_chunk(f: IO, model: VoxModel):
+        node = VoxNode()
+        node.type = "GRP"
+        node.node_id = ImportVOX.read_int32(f)
+        node.node_attributes = ImportVOX.read_dict(f)
+        num_child_ids = ImportVOX.read_int32(f)
+        for i in range(0, num_child_ids):
+            child_node_id = ImportVOX.read_int32(f)
+            node.child_ids.append(child_node_id)
+        model.nodes[node.node_id] = node
+
+    @staticmethod
+    def read_nshp_chunk(f: IO, model: VoxModel):
+        node = VoxNode()
+        node.type = "SHP"
+        node.node_id = ImportVOX.read_int32(f)
+        node.node_attributes = ImportVOX.read_dict(f)
+        num_models = ImportVOX.read_int32(f)
+        for i in range(0, num_models):
+            model_id = ImportVOX.read_int32(f)
+            model_attributes = ImportVOX.read_dict(f)
+            node.meshes[model_id] = model_attributes
+        model.nodes[node.node_id] = node
+
+    @staticmethod
+    def read_matl_chunk(f: IO, model: VoxModel):
+        material_id = ImportVOX.read_int32(f)
+        model.materials[material_id] = VoxMaterial(ImportVOX.read_dict(f))
+
+    @staticmethod
+    def read_matt_chunk(f: IO, model: VoxModel):
+        material_id = ImportVOX.read_int32(f)
+        # 0: diffuse, 1: metal, 2: glass, 3: emissive
+        material_type = ImportVOX.read_int32(f)
+        type_keys = ['_diffuse', '_metal', '_glass', '_emit']
+        # diffuse:   1.0
+        # metal:    (0.0 - 1.0] : blend between metal and diffuse material
+        # glass:    (0.0 - 1.0] : blend between glass and diffuse material
+        # emissive: (0.0 - 1.0] : self-illuminated material
+        material_weight = ImportVOX.read_float32(f)
+        # set if value is saved in next section
+        # bit(0) : Plastic
+        # bit(1) : Roughness
+        # bit(2) : Specular
+        # bit(3) : IOR
+        # bit(4) : Attenuation
+        # bit(5) : Power
+        # bit(6) : Glow
+        # bit(7) : isTotalPower (*no value)
+        property_bits = ImportVOX.read_int32(f)
+        # TODO: translate rest of keys
+        bit_keys = ['_plastic', '_rough', '_spec', '_ior', '_att', 'power', 'glow', 'isTotalPower']
+        # TODO: normalized property value: (0.0 - 1.0], need to map to real range
+        property_values = {bit_keys[i]: 1 if i == 7 else ImportVOX.read_float32(f) for i in range(8) if
+                           (1 << i) & property_bits != 0}
+        property_values['_weight'] = material_weight
+        if 0 <= material_type < len(type_keys):
+            property_values['_type'] = type_keys[material_type]
+        else:
+            property_values['_type'] = type_keys[0]
+        model.materials[material_id] = VoxMaterial(property_values)
+
+    @staticmethod
+    def read_layr_chunk(f: IO, model: VoxModel):
+        layer_id = ImportVOX.read_int32(f)
+        model.layers[layer_id] = ImportVOX.read_dict(f)
+        _ = ImportVOX.read_int32(f)  # reserved id, must be -1
+
+    @staticmethod
+    def read_rgba_chunk(f: IO, model: VoxModel):
+        custom_palette: List[Tuple[int, int, int, int]] = [(0, 0, 0, 255)]
+        for i in range(256):
+            r = ImportVOX.read_uint8(f)
+            g = ImportVOX.read_uint8(f)
+            b = ImportVOX.read_uint8(f)
+            a = ImportVOX.read_uint8(f)
+            color = (r, g, b, a)
+            if i == 255:
+                custom_palette[0] = color
+            else:
+                custom_palette.append(color)
+        model.color_palette = custom_palette
+
+    @staticmethod
+    def read_imap_chunk(f: IO, _: VoxModel):
+        _ = {ImportVOX.read_uint8(f): (i + 1) % 256 for i in range(256)}
+        # IMAP in combination with custom palette is only relevant for showing the palette in MV. Ignored.
+
+    @staticmethod
+    def read_note_chunk(f: IO, _: VoxModel):
+        num_color_names = ImportVOX.read_int32(f)
+        _ = [ImportVOX.read_string(f) for _ in range(num_color_names)]  # color_names
+        # color palette names are ignored
+
+    @staticmethod
     def read_next_chunk(f: IO, model: VoxModel):
         riff_id = ImportVOX.read_riff_id(f)
         content_byte_length = ImportVOX.read_int32(f)
         ImportVOX.read_int32(f)  # children_byte_length
         current_position = f.tell()
         if riff_id == 'PACK':
-            ImportVOX.read_int32(f)  # num_models
+            ImportVOX.read_pack_chunk(f, model)
         elif riff_id == 'SIZE':
-            mesh = VoxMesh(
-                model.next_model_id,
-                ImportVOX.read_int32(f),
-                ImportVOX.read_int32(f),
-                ImportVOX.read_int32(f)
-            )
-            model.next_model_id += 1
-            model.meshes.append(mesh)
+            ImportVOX.read_size_chunk(f, model)
         elif riff_id == 'XYZI':
-            num_voxels = ImportVOX.read_int32(f)
-            for i in range(0, num_voxels):
-                model.meshes[-1].set_voxel_color_index(
-                    ImportVOX.read_uint8(f),
-                    ImportVOX.read_uint8(f),
-                    ImportVOX.read_uint8(f),
-                    ImportVOX.read_uint8(f)
-                )
+            ImportVOX.read_xyzi_chunk(f, model)
         elif riff_id == 'rCAM':
-            camera_id = ImportVOX.read_int32(f)
-            model.cameras[camera_id] = ImportVOX.read_dict(f)
+            ImportVOX.read_rcam_chunk(f, model)
         elif riff_id == 'rOBJ':
-            model.rendering_attributes.append(ImportVOX.read_dict(f))
+            ImportVOX.read_robj_chunk(f, model)
         elif riff_id == 'nTRN':
-            node = VoxNode()
-            node.type = "TRN"
-            node.node_id = ImportVOX.read_int32(f)
-            node.node_attributes = ImportVOX.read_dict(f)
-            child_node_id = ImportVOX.read_int32(f)
-            node.child_ids.append(child_node_id)
-            ImportVOX.read_int32(f)  # reserved id, must be -1
-            node.layer_id = ImportVOX.read_int32(f)
-            num_frames = ImportVOX.read_int32(f)
-            node.frame_attributes = {i: ImportVOX.read_dict(f) for i in range(0, num_frames)}
-            model.nodes[node.node_id] = node
+            ImportVOX.read_ntrn_chunk(f, model)
         elif riff_id == 'nGRP':
-            node = VoxNode()
-            node.type = "GRP"
-            node.node_id = ImportVOX.read_int32(f)
-            node.node_attributes = ImportVOX.read_dict(f)
-            num_child_ids = ImportVOX.read_int32(f)
-            for i in range(0, num_child_ids):
-                child_node_id = ImportVOX.read_int32(f)
-                node.child_ids.append(child_node_id)
-            model.nodes[node.node_id] = node
+            ImportVOX.read_ngrp_chunk(f, model)
         elif riff_id == 'nSHP':
-            node = VoxNode()
-            node.type = "SHP"
-            node.node_id = ImportVOX.read_int32(f)
-            node.node_attributes = ImportVOX.read_dict(f)
-            num_models = ImportVOX.read_int32(f)
-            for i in range(0, num_models):
-                model_id = ImportVOX.read_int32(f)
-                model_attributes = ImportVOX.read_dict(f)
-                node.meshes[model_id] = model_attributes
-            model.nodes[node.node_id] = node
+            ImportVOX.read_nshp_chunk(f, model)
         elif riff_id == 'MATL':
-            material_id = ImportVOX.read_int32(f)
-            model.materials[material_id] = VoxMaterial(ImportVOX.read_dict(f))
+            ImportVOX.read_matl_chunk(f, model)
         elif riff_id == 'MATT':  # Legacy material
-            material_id = ImportVOX.read_int32(f)
-            # 0: diffuse, 1: metal, 2: glass, 3: emissive
-            material_type = ImportVOX.read_int32(f)
-            type_keys = ['_diffuse', '_metal', '_glass', '_emit']
-            # diffuse:   1.0
-            # metal:    (0.0 - 1.0] : blend between metal and diffuse material
-            # glass:    (0.0 - 1.0] : blend between glass and diffuse material
-            # emissive: (0.0 - 1.0] : self-illuminated material
-            material_weight = ImportVOX.read_float32(f)
-            # set if value is saved in next section
-            # bit(0) : Plastic
-            # bit(1) : Roughness
-            # bit(2) : Specular
-            # bit(3) : IOR
-            # bit(4) : Attenuation
-            # bit(5) : Power
-            # bit(6) : Glow
-            # bit(7) : isTotalPower (*no value)
-            property_bits = ImportVOX.read_int32(f)
-            # TODO: translate rest of keys
-            bit_keys = ['_plastic', '_rough', '_spec', '_ior', '_att', 'power', 'glow', 'isTotalPower']
-            # TODO: normalized property value: (0.0 - 1.0], need to map to real range
-            property_values = {bit_keys[i]: 1 if i == 7 else ImportVOX.read_float32(f) for i in range(8) if
-                               (1 << i) & property_bits != 0}
-            property_values['_weight'] = material_weight
-            if 0 <= material_type < len(type_keys):
-                property_values['_type'] = type_keys[material_type]
-            else:
-                property_values['_type'] = type_keys[0]
-            model.materials[material_id] = VoxMaterial(property_values)
+            ImportVOX.read_matt_chunk(f, model)
         elif riff_id == 'LAYR':
-            layer_id = ImportVOX.read_int32(f)
-            model.layers[layer_id] = ImportVOX.read_dict(f)
-            _ = ImportVOX.read_int32(f)  # reserved id, must be -1
+            ImportVOX.read_layr_chunk(f, model)
         elif riff_id == 'RGBA':
-            custom_palette: List[Tuple[int, int, int, int]] = [(0, 0, 0, 255)]
-            for i in range(256):
-                r = ImportVOX.read_uint8(f)
-                g = ImportVOX.read_uint8(f)
-                b = ImportVOX.read_uint8(f)
-                a = ImportVOX.read_uint8(f)
-                color = (r, g, b, a)
-                if i == 255:
-                    custom_palette[0] = color
-                else:
-                    custom_palette.append(color)
-            model.color_palette = custom_palette
+            ImportVOX.read_rgba_chunk(f, model)
         elif riff_id == 'IMAP':
-            _ = {ImportVOX.read_uint8(f): (i + 1) % 256 for i in range(256)}  # model.color_palette_lookup
-            # TODO: IMAP seems to collide with custom palette. Needs further investigation
+            ImportVOX.read_imap_chunk(f, model)
         elif riff_id == 'NOTE':
-            num_color_names = ImportVOX.read_int32(f)
-            _ = [ImportVOX.read_string(f) for _ in range(num_color_names)]  # color_names
-            # TODO
+            ImportVOX.read_note_chunk(f, model)
         # Skip unknown data
         if current_position + content_byte_length > f.tell():
             f.seek(current_position + content_byte_length)
