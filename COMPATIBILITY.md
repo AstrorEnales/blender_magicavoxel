@@ -8,6 +8,10 @@
 
 ## Blender versions
 
+> Newest compatible tested version: 3.1.2
+
+> Oldest compatible tested version: 2.80
+
 | Blender Version |     Status     |
 |----------------:|:--------------:|
 |           3.1.2 |       ✅        |
@@ -59,7 +63,7 @@
 |            2.82 | not tested yet |
 |           2.81a | not tested yet |
 |            2.81 | not tested yet |
-|            2.80 | not tested yet |
+|            2.80 |       ✅        |
 |           2.79b | not tested yet |
 |           2.79a | not tested yet |
 |            2.79 | not tested yet |

@@ -798,6 +798,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=False,
     )
 
+    def create_vertex_color_node(self, nodes, layer_name: str):
+        try:
+            n = nodes.new("ShaderNodeVertexColor")
+            n.layer_name = layer_name
+            return n
+        except:
+            n = nodes.new("ShaderNodeAttribute")
+            n.attribute_name = layer_name
+            return n
+
     def execute(self, context):
         keywords = self.as_keywords(
             ignore=(
@@ -865,11 +875,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 nodes = vertex_color_mat.node_tree.nodes
                 links = vertex_color_mat.node_tree.links
                 bdsf_node = nodes["Principled BSDF"]
-                vertex_color_node = nodes.new("ShaderNodeVertexColor")
-                vertex_color_node.layer_name = "Col"
+                vertex_color_node = self.create_vertex_color_node(nodes, "Col")
                 if self.material_mode == "VERTEX_COLOR_PROP":
-                    vertex_color_material_node = nodes.new("ShaderNodeVertexColor")
-                    vertex_color_material_node.layer_name = "Mat"
+                    vertex_color_material_node = self.create_vertex_color_node(nodes, "Mat")
                     separate_rgb_node = nodes.new("ShaderNodeSeparateRGB")
                     links.new(vertex_color_material_node.outputs["Color"], separate_rgb_node.inputs["Image"])
                     links.new(separate_rgb_node.outputs["R"], bdsf_node.inputs["Roughness"])
