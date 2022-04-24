@@ -86,7 +86,7 @@
 |            2.72 | not tested yet |
 |            2.71 | not tested yet |
 |           2.70a | not tested yet |
-|            2.70 | not tested yet |
+|            2.70 |       ❌        |
 |            2.69 | not tested yet |
 |           2.68a | not tested yet |
 |            2.68 | not tested yet |
