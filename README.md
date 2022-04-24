@@ -11,11 +11,12 @@ loading [MagicaVoxel](https://ephtracy.github.io) VOX files.
 
 The latest version can be downloaded [here](https://github.com/AstrorEnales/blender_magicavoxel/releases/latest).
 
-## 🧪️ Version Information
+## 🧪️ Version Compatibility
 
-**Please note:** The initial release is tested with Blender 3.0.0 and MagicaVoxel 0.99.7.0 (Beta). More in-depth tests
-with different versions will be done in the near future. If you need support for specific (older) versions, please
-feel free to create an issue with the version info.
+The primary goal is the support of the newest version of both MagicaVoxel and Blender. Of course the addon works well
+with other versions as well (see [Compatibility](COMPATIBILITY.md)). If you need support for specific (older) versions,
+please feel free to create an issue with
+the version info.
 
 ## 🔧 Installation
 
