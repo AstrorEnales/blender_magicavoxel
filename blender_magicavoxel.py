@@ -1150,10 +1150,15 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     @staticmethod
     def read_dict(f: IO) -> Dict[str, str]:
         num_pairs = ImportVOX.read_int32(f)
-        return {
-            ImportVOX.read_string(f): ImportVOX.read_string(f)
-            for _ in range(0, num_pairs)
-        }
+        # Beware, reading from a file can not be done directly in a dict comprehension as with pep-0572 (python 3.8)
+        # the order in which dict comprehension keys and values are evaluated changed. Here we explicitly load key and
+        # value in order and only then push them to the dictionary.
+        result = {}
+        for _ in range(0, num_pairs):
+            key = ImportVOX.read_string(f)
+            value = ImportVOX.read_string(f)
+            result[key] = value
+        return result
 
     @staticmethod
     def read_pack_chunk(f: IO, _: VoxModel):
