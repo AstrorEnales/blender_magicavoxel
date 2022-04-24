@@ -608,18 +608,26 @@ class GreedyMeshing:
 class VoxMaterial:
     def __init__(self, data: Dict[str, str]):
         self.data = data
-        # TODO: improve
-        self.is_metal = "_type" in data and data["_type"] == "_metal" or "_metal" in data
-        self.roughness = float(data["_rough"]) if "_rough" in data else 0.5
-        self.metallic = ((float(data["_weight"]) if "_weight" in data else 1) if data else 0)
-        self.ior = float(data["_ior"]) if "_ior" in data else 1.45
-        # TODO: {'_ri': '1.3', '_d': '0.05'}
-        #  (_type : str) _diffuse, _metal, _glass, _emit
-        #  (_weight : float) range 0 ~ 1
-        #  (_spec : float)
-        #  (_att : float)
-        #  (_flux : float)
-        #  (_plastic)
+        # None --> Diffuse, "_metal", "_glass", "_blend", "_media" --> Cloud, "_emit"
+        self.type = data["_type"] if "_type" in data else ""
+        # _rough --> Roughness [0-1] float, default: 0.1 | 0.1 --> UI 10
+        self.roughness = float(data["_rough"]) if "_rough" in data else 0.1
+        # _metal --> Metallic [0-1] float, default: 0.0
+        self.metallic = float(data["_metal"]) if "_metal" in data and self.type in ["_metal", "_blend"] else 0
+        # data["_ior"] = (data["_ri"] - 1), MV shows _ri in UI and Blender uses _ri value range as well for IOR
+        # default 0.3 / 1.3
+        self.ior = float(data["_ri"]) if "_ri" in data else 1.3
+        # TODO
+        # _d --> Density , default: 0.05 | 0.025 --> UI 25 | 0.050 --> UI 50
+        # _sp --> Specular [1-2] float, default 1.0
+        # _ldr --> LDR [0-1] float, default: 0.0 | 0.8 --> UI 80
+        # _g --> Phase [-0.9-0.9] float, default: 0.0
+        # _sp --> Specular [1-2] float, default 1.0
+        # _flux --> Power {0, 1, 2, 3, 4}, default 0
+        # _emit --> Emission [0-1] float, default: 0.0 | 0.39 --> UI 39
+        # _alpha == _trans --> Transparency [0-1] float, default: 0.0 | 0.5 --> UI 50
+        # _media_type [None --> Absorb, "_scatter" --> Scatter, "_emit" --> Emissive, "_sss" --> Subsurface Scattering]
+        # _media [None --> Absorb, 1 --> Scatter, 2 --> Emissive, 3 --> Subsurface Scattering]
 
 
 class VoxMesh:
