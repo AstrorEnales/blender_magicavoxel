@@ -618,16 +618,25 @@ class VoxMaterial:
         # data["_ior"] = (data["_ri"] - 1), MV shows _ri in UI and Blender uses _ri value range as well for IOR
         # default 0.3 / 1.3
         self.ior = float(data["_ri"]) if "_ri" in data else 1.3
+        # _d --> Density [0-1], default: 0.05 | 0.025 --> UI 25 | 0.050 --> UI 50
+        self.density = float(data["_d"]) if "_d" in data and self.type in ["_glass", "_blend", "_media"] else 0
+        # _flux --> Power {0, 1, 2, 3, 4}, default 0
+        # We calculate +1 to the power as we handle it just as a multiplier
+        self.flux = float(data["_flux"]) + 1 if "_flux" in data and self.type == "_emit" else 0
+        # _emit --> Emission [0-1] float, default: 0.0
+        self.emission = float(data["_emit"]) * self.flux if "_emit" in data and self.type == "_emit" else 0
+        # _alpha == _trans --> Transparency [0-1] float, default: 0.0 | 0.5 --> UI 50
+        self.transmission = float(data["_trans"]) if "_trans" in data and self.type in ["_glass", "_blend"] else 0
         # TODO
-        # _d --> Density , default: 0.05 | 0.025 --> UI 25 | 0.050 --> UI 50
         # _sp --> Specular [1-2] float, default 1.0
         # _ldr --> LDR [0-1] float, default: 0.0 | 0.8 --> UI 80
         # _g --> Phase [-0.9-0.9] float, default: 0.0
-        # _sp --> Specular [1-2] float, default 1.0
-        # _flux --> Power {0, 1, 2, 3, 4}, default 0
-        # _emit --> Emission [0-1] float, default: 0.0 | 0.39 --> UI 39
-        # _alpha == _trans --> Transparency [0-1] float, default: 0.0 | 0.5 --> UI 50
-        # _media_type [None --> Absorb, "_scatter" --> Scatter, "_emit" --> Emissive, "_sss" --> Subsurface Scattering]
+        # _media_type [
+        #   None --> Absorb, (Volume Absorption node)
+        #   "_scatter" --> Scatter, (Volume Scatter node)
+        #   "_emit" --> Emissive, (Emission node)
+        #   "_sss" --> Subsurface Scattering
+        # ]
         # _media [None --> Absorb, 1 --> Scatter, 2 --> Emissive, 3 --> Subsurface Scattering]
 
 
