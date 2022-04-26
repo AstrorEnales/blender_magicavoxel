@@ -611,7 +611,8 @@ class VoxMaterial:
         # None --> Diffuse, "_metal", "_glass", "_blend", "_media" --> Cloud, "_emit"
         self.type = data["_type"] if "_type" in data else ""
         # _rough --> Roughness [0-1] float, default: 0.1 | 0.1 --> UI 10
-        self.roughness = float(data["_rough"]) if "_rough" in data else 0.1
+        # Multiply by 0.5 as the max roughness of MV roughly matches a value of 0.5
+        self.roughness = (float(data["_rough"]) if "_rough" in data else 0.1) * 0.5
         # _metal --> Metallic [0-1] float, default: 0.0
         self.metallic = float(data["_metal"]) if "_metal" in data and self.type in ["_metal", "_blend"] else 0
         # data["_ior"] = (data["_ri"] - 1), MV shows _ri in UI and Blender uses _ri value range as well for IOR
