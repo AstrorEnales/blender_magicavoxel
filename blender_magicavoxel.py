@@ -669,6 +669,13 @@ class VoxMaterial:
         # _g --> Phase [-0.9-0.9] float, default: 0.0
         self.phase = float(data["_g"]) if "_g" in data and has_media else 0
 
+    def __str__(self):
+        return ("VoxMaterial {type: %s, roughness: %s, metallic: %s, specular: %s, ior: %s, emission: %s, " +
+                "flux: %s, ldr: %s, transmission: %s, media_type: %s, density: %s, phase: %s}") % (
+                   self.type, self.roughness, self.metallic, self.specular, self.ior, self.emission, self.flux,
+                   self.ldr,
+                   self.transmission, self.media_type, self.density, self.phase)
+
 
 class VoxMesh:
     def __init__(self, model_id: int, width: int, depth: int, height: int):
@@ -956,17 +963,18 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             elif self.material_mode == "MAT_PER_COLOR" or self.material_mode == "MAT_PER_COLOR_PROP":
                 for color_index in range(len(result.color_palette)):
                     if color_index in color_index_material_map:
-                        material = result.materials[color_index + 1]
-                        mat = bpy.data.materials.new(name="%s Material %s" % (collection_name, color_index + 1))
+                        material = result.materials[color_index]
+                        mat = bpy.data.materials.new(name="%s Material %s" % (collection_name, color_index))
                         mat.use_nodes = True
                         bdsf_node = mat.node_tree.nodes["Principled BSDF"]
                         color = result.get_color(color_index)
+                        bdsf_node.inputs["Base Color"].default_value = color
                         if self.material_mode == "MAT_PER_COLOR_PROP":
                             bdsf_node.inputs["Roughness"].default_value = material.roughness
                             bdsf_node.inputs["Metallic"].default_value = material.metallic
                             bdsf_node.inputs["IOR"].default_value = material.ior
                             bdsf_node.inputs["Emission Strength"].default_value = 0
-                            bdsf_node.inputs["Base Color"].default_value = color
+                            bdsf_node.inputs["Emission"].default_value = color
                         materials.append(mat)
             elif self.material_mode == "MAT_AS_TEX" or self.material_mode == "MAT_AS_TEX_PROP":
                 color_texture = bpy.data.images.new(collection_name + " Color Texture", width=256, height=1)
@@ -991,7 +999,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     mat_texture = bpy.data.images.new(collection_name + " Material Texture", width=256, height=1)
                     mat_texture.colorspace_settings.name = 'Non-Color'
                     for color_index in range(len(result.color_palette)):
-                        material = result.materials[color_index + 1]
+                        material = result.materials[color_index]
                         pixel_index = color_index * 4
                         mat_texture.pixels[pixel_index] = material.roughness
                         mat_texture.pixels[pixel_index + 1] = material.metallic
@@ -1309,12 +1317,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_matl_chunk(f: IO, model: VoxModel):
-        material_id = ImportVOX.read_int32(f)
+        material_id = ImportVOX.read_int32(f) % 256
         model.materials[material_id] = VoxMaterial(ImportVOX.read_dict(f))
 
     @staticmethod
     def read_matt_chunk(f: IO, model: VoxModel):
-        material_id = ImportVOX.read_int32(f)
+        material_id = ImportVOX.read_int32(f) % 256
         # 0: diffuse, 1: metal, 2: glass, 3: emissive
         material_type = ImportVOX.read_int32(f)
         type_keys = ['_diffuse', '_metal', '_glass', '_emit']
