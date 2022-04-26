@@ -901,8 +901,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     links.new(separate_rgb_node.outputs["R"], bdsf_node.inputs["Roughness"])
                     links.new(separate_rgb_node.outputs["G"], bdsf_node.inputs["Metallic"])
                     links.new(separate_rgb_node.outputs["B"], bdsf_node.inputs["IOR"])
+                    bdsf_node.inputs["Emission Strength"].default_value = 0
+                    links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Emission"])
                 links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Base Color"])
-                links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Emission"])
                 materials.append(vertex_color_mat)
             elif self.material_mode == "MAT_PER_COLOR" or self.material_mode == "MAT_PER_COLOR_PROP":
                 for color_index in range(len(result.color_palette)):
@@ -911,12 +912,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     mat.use_nodes = True
                     bdsf_node = mat.node_tree.nodes["Principled BSDF"]
                     color = result.get_color(color_index)
-                    bdsf_node.inputs["Base Color"].default_value = color
-                    bdsf_node.inputs["Emission"].default_value = color
                     if self.material_mode == "MAT_PER_COLOR_PROP":
                         bdsf_node.inputs["Roughness"].default_value = material.roughness
                         bdsf_node.inputs["Metallic"].default_value = material.metallic
                         bdsf_node.inputs["IOR"].default_value = material.ior
+                        bdsf_node.inputs["Emission Strength"].default_value = 0
+                        bdsf_node.inputs["Base Color"].default_value = color
                     materials.append(mat)
             elif self.material_mode == "MAT_AS_TEX" or self.material_mode == "MAT_AS_TEX_PROP":
                 color_texture = bpy.data.images.new(collection_name + " Color Texture", width=256, height=1)
@@ -935,8 +936,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 color_texture_node = nodes.new("ShaderNodeTexImage")
                 color_texture_node.image = color_texture
                 links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Base Color"])
-                links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Emission"])
                 if self.material_mode == "MAT_AS_TEX_PROP":
+                    links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Emission"])
+                    bdsf_node.inputs["Emission Strength"].default_value = 0
                     mat_texture = bpy.data.images.new(collection_name + " Material Texture", width=256, height=1)
                     mat_texture.colorspace_settings.name = 'Non-Color'
                     for color_index in range(len(result.color_palette)):
