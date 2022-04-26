@@ -754,11 +754,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     )
 
     voxel_size: FloatProperty(
-        name="Voxel Size",
-        description="Size of the imported voxels",
+        name="Voxel Size (m)",
+        description="Size of the imported voxels in meters",
         min=0.0001,
         soft_min=0.0001,
-        default=1.0,
+        default=0.1,
     )
 
     material_mode: EnumProperty(
