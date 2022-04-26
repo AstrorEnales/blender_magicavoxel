@@ -675,10 +675,12 @@ class VoxMesh:
         self.model_id = model_id
         self.grid: VoxelGrid = VoxelGrid(width, depth, height)
         self.voxels: List[int or None] = [None] * width * depth * height
+        self.used_color_indices: Set[int] = set()
 
     def set_voxel_color_index(self, x: int, y: int, z: int, color_index: int):
         index = self.grid.get_index(x, y, z)
         self.voxels[index] = color_index
+        self.used_color_indices.add(color_index)
 
     def get_voxel_color_index(self, x: int, y: int, z: int) -> int or None:
         index = self.grid.get_index(x, y, z)
@@ -752,6 +754,21 @@ class VoxModel:
         self.meshes: List[VoxMesh] = []
         self.nodes: Dict[int, VoxNode] = {}
 
+    def get_all_used_color_indices(self) -> Set[int]:
+        used_color_indices: Set[int] = set()
+        for mesh in self.meshes:
+            used_color_indices.update(mesh.used_color_indices)
+        return used_color_indices
+
+    def get_used_color_indices_material_map(self) -> Dict[int, int]:
+        result: Dict[int, int] = {}
+        used_color_indices = sorted(self.get_all_used_color_indices())
+        material_slot_index = 0
+        for color_index in used_color_indices:
+            result[color_index] = material_slot_index
+            material_slot_index += 1
+        return result
+
     def get_color(self, color_index: int) -> Tuple[float, float, float, float]:
         color = self.color_palette[color_index]
         return color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3] / 255.0
@@ -816,7 +833,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             ("MAT_AS_TEX", "Materials As Texture", "The color palette is created as a 256x1 texture. A simple " +
              "material is added using this texture."),
             ("MAT_AS_TEX_PROP", "Materials As Texture + Prop", "The color palette and certain material properties " +
-             "are created as a 256x1 texture. A simple material is added using these textures."),
+             "are created as 256x1 textures. A simple material is added using these textures."),
         ],
         description="",
         default="VERTEX_COLOR"
@@ -917,6 +934,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     # TODO: {'_frustum': '0.414214'}
                     voxel_collection.objects.link(camera_object)
             materials = []
+            color_index_material_map = result.get_used_color_indices_material_map()
             if self.material_mode == "VERTEX_COLOR" or self.material_mode == "VERTEX_COLOR_PROP":
                 vertex_color_mat = bpy.data.materials.new(name=collection_name + " Material")
                 vertex_color_mat.use_nodes = True
@@ -937,18 +955,19 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 materials.append(vertex_color_mat)
             elif self.material_mode == "MAT_PER_COLOR" or self.material_mode == "MAT_PER_COLOR_PROP":
                 for color_index in range(len(result.color_palette)):
-                    material = result.materials[color_index + 1]
-                    mat = bpy.data.materials.new(name="%s Material %s" % (collection_name, color_index + 1))
-                    mat.use_nodes = True
-                    bdsf_node = mat.node_tree.nodes["Principled BSDF"]
-                    color = result.get_color(color_index)
-                    if self.material_mode == "MAT_PER_COLOR_PROP":
-                        bdsf_node.inputs["Roughness"].default_value = material.roughness
-                        bdsf_node.inputs["Metallic"].default_value = material.metallic
-                        bdsf_node.inputs["IOR"].default_value = material.ior
-                        bdsf_node.inputs["Emission Strength"].default_value = 0
-                        bdsf_node.inputs["Base Color"].default_value = color
-                    materials.append(mat)
+                    if color_index in color_index_material_map:
+                        material = result.materials[color_index + 1]
+                        mat = bpy.data.materials.new(name="%s Material %s" % (collection_name, color_index + 1))
+                        mat.use_nodes = True
+                        bdsf_node = mat.node_tree.nodes["Principled BSDF"]
+                        color = result.get_color(color_index)
+                        if self.material_mode == "MAT_PER_COLOR_PROP":
+                            bdsf_node.inputs["Roughness"].default_value = material.roughness
+                            bdsf_node.inputs["Metallic"].default_value = material.metallic
+                            bdsf_node.inputs["IOR"].default_value = material.ior
+                            bdsf_node.inputs["Emission Strength"].default_value = 0
+                            bdsf_node.inputs["Base Color"].default_value = color
+                        materials.append(mat)
             elif self.material_mode == "MAT_AS_TEX" or self.material_mode == "MAT_AS_TEX_PROP":
                 color_texture = bpy.data.images.new(collection_name + " Color Texture", width=256, height=1)
                 for i in range(256):
@@ -1097,7 +1116,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         for material in materials:
                             new_mesh.materials.append(material)
                         for i, face in enumerate(new_mesh.polygons):
-                            face.material_index = quads[i].color
+                            face.material_index = color_index_material_map[quads[i].color]
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
                     generated_mesh_models.append(new_object)
                 model_id_object_lookup[mesh_index] = generated_mesh_models
