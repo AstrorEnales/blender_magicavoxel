@@ -610,31 +610,48 @@ class GreedyMeshing:
 
 
 class VoxMaterial:
+    TYPE_DIFFUSE = ""
+    TYPE_METAL = "_metal"
+    TYPE_GLASS = "_glass"
+    TYPE_BLEND = "_blend"
+    TYPE_MEDIA = "_media"  # Cloud in MV UI
+    TYPE_EMIT = "_emit"
+    MEDIA_TYPE_ABSORB = ""
+    MEDIA_TYPE_SCATTER = "_scatter"
+    MEDIA_TYPE_EMIT = "_emit"  # Emissive
+    MEDIA_TYPE_SSS = "_sss"  # Subsurface Scattering
+
     def __init__(self, data: Dict[str, str]):
         self.data = data
-        # None --> Diffuse, "_metal", "_glass", "_blend", "_media" --> Cloud, "_emit"
-        self.type = data["_type"] if "_type" in data else ""
+        self.type = VoxMaterial.TYPE_DIFFUSE
+        if "_type" in data and data["_type"] in [
+            VoxMaterial.TYPE_METAL, VoxMaterial.TYPE_GLASS, VoxMaterial.TYPE_BLEND, VoxMaterial.TYPE_MEDIA,
+            VoxMaterial.TYPE_EMIT
+        ]:
+            self.type = data["_type"]
         # _rough --> Roughness [0-1] float, default: 0.1 | 0.1 --> UI 10
         # Multiply by 0.5 as the max roughness of MV roughly matches a value of 0.5
         self.roughness = (float(data["_rough"]) if "_rough" in data else 0.1) * 0.5
+        has_metal = self.type in [VoxMaterial.TYPE_METAL, VoxMaterial.TYPE_BLEND]
         # _metal --> Metallic [0-1] float, default: 0.0
-        self.metallic = float(data["_metal"]) if "_metal" in data and self.type in ["_metal", "_blend"] else 0
+        self.metallic = float(data["_metal"]) if "_metal" in data and has_metal else 0
+        # _sp --> Specular [1-2] float, default 1.0
+        self.specular = float(data["_sp"]) if "_sp" in data and has_metal else 1
         # data["_ior"] = (data["_ri"] - 1), MV shows _ri in UI and Blender uses _ri value range as well for IOR
         # default 0.3 / 1.3
         self.ior = float(data["_ri"]) if "_ri" in data else 1.3
-        # _d --> Density [0-1], default: 0.05 | 0.025 --> UI 25 | 0.050 --> UI 50
-        self.density = float(data["_d"]) if "_d" in data and self.type in ["_glass", "_blend", "_media"] else 0
         # _flux --> Power {0, 1, 2, 3, 4}, default 0
         # We calculate +1 to the power as we handle it just as a multiplier
         self.flux = float(data["_flux"]) + 1 if "_flux" in data and self.type == "_emit" else 0
+        has_emission = self.type == VoxMaterial.TYPE_EMIT
         # _emit --> Emission [0-1] float, default: 0.0
-        self.emission = float(data["_emit"]) * self.flux if "_emit" in data and self.type == "_emit" else 0
-        # _alpha == _trans --> Transparency [0-1] float, default: 0.0 | 0.5 --> UI 50
-        self.transmission = float(data["_trans"]) if "_trans" in data and self.type in ["_glass", "_blend"] else 0
-        # TODO
-        # _sp --> Specular [1-2] float, default 1.0
+        self.emission = float(data["_emit"]) * self.flux if "_emit" in data and has_emission else 0
         # _ldr --> LDR [0-1] float, default: 0.0 | 0.8 --> UI 80
-        # _g --> Phase [-0.9-0.9] float, default: 0.0
+        self.ldr = float(data["_ldr"]) if "_ldr" in data and has_emission else 0
+        has_transmission = self.type in [VoxMaterial.TYPE_GLASS, VoxMaterial.TYPE_BLEND]
+        # _alpha == _trans --> Transparency [0-1] float, default: 0.0 | 0.5 --> UI 50
+        self.transmission = float(data["_trans"]) if "_trans" in data and has_transmission else 0
+        has_media = self.type in [VoxMaterial.TYPE_GLASS, VoxMaterial.TYPE_BLEND, VoxMaterial.TYPE_MEDIA]
         # _media_type [
         #   None --> Absorb, (Volume Absorption node)
         #   "_scatter" --> Scatter, (Volume Scatter node)
@@ -642,6 +659,15 @@ class VoxMaterial:
         #   "_sss" --> Subsurface Scattering
         # ]
         # _media [None --> Absorb, 1 --> Scatter, 2 --> Emissive, 3 --> Subsurface Scattering]
+        self.media_type = VoxMaterial.MEDIA_TYPE_ABSORB
+        if has_media and "_media_type" in data and data["_media_type"] in [
+            VoxMaterial.MEDIA_TYPE_SCATTER, VoxMaterial.MEDIA_TYPE_EMIT, VoxMaterial.MEDIA_TYPE_SSS
+        ]:
+            self.media_type = data["_media_type"]
+        # _d --> Density [0-1], default: 0.05 | 0.025 --> UI 25 | 0.050 --> UI 50
+        self.density = float(data["_d"]) if "_d" in data and has_media else 0
+        # _g --> Phase [-0.9-0.9] float, default: 0.0
+        self.phase = float(data["_g"]) if "_g" in data and has_media else 0
 
 
 class VoxMesh:
