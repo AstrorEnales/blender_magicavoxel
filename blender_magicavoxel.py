@@ -210,12 +210,12 @@ class VoxelGrid:
 
     def create_outside_grid(self, voxels: List[int or None]) -> List[int or None]:
         distinct_areas = self.find_distinct_areas(voxels)
-        outside_index = self.find_outside_index(voxels)
-        if outside_index is None:
+        outside_indices = self.find_outside_indices(voxels)
+        if outside_indices is None:
             # All is marked as outside to prevent any faces to be removed
             return [False] * self.size
-        outside_label = distinct_areas[outside_index]
-        return [label == outside_label for label in distinct_areas]
+        outside_labels = [distinct_areas[i] for i in outside_indices]
+        return [label in outside_labels for label in distinct_areas]
 
     def find_distinct_areas(self, voxels: List[int or None]) -> List[int]:
         """
@@ -283,32 +283,36 @@ class VoxelGrid:
                         labels[index] = label_map[labels[index]]
         return labels
 
-    def find_outside_index(self, voxels: List[int or None]) -> int or None:
+    def find_outside_indices(self, voxels: List[int or None]) -> Set[int] or None:
+        outside_indices = set()
+        # Collect front/back outside indices
         for z in range(0, self.height):
             for x in range(0, self.width):
                 index = self.get_index(x, 0, z)
                 if voxels[index] is None:
-                    return index
+                    outside_indices.add(index)
                 index = self.get_index(x, self.last_index_y, z)
                 if voxels[index] is None:
-                    return index
+                    outside_indices.add(index)
+        # Collect bottom/top outside indices
         for y in range(0, self.depth):
             for x in range(0, self.width):
                 index = self.get_index(x, y, 0)
                 if voxels[index] is None:
-                    return index
+                    outside_indices.add(index)
                 index = self.get_index(x, y, self.last_index_z)
                 if voxels[index] is None:
-                    return index
+                    outside_indices.add(index)
+        # Collect left/right outside indices
         for y in range(0, self.depth):
             for z in range(0, self.height):
                 index = self.get_index(0, y, z)
                 if voxels[index] is None:
-                    return index
+                    outside_indices.add(index)
                 index = self.get_index(self.last_index_x, y, z)
                 if voxels[index] is None:
-                    return index
-        return None
+                    outside_indices.add(index)
+        return outside_indices if len(outside_indices) > 0 else None
 
 
 class Quad:
