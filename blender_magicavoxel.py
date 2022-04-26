@@ -1007,9 +1007,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     faces = [
                         [
                             self.get_or_create_vertex(vertices_map, vertices, quad.p1, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p2, mesh),
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p4, mesh),
                             self.get_or_create_vertex(vertices_map, vertices, quad.p3, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p4, mesh)
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p2, mesh)
                         ]
                         for quad in quads
                     ]
