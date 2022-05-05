@@ -35,6 +35,7 @@ https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox.
 https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox-extension.txt
 """
 
+import time
 import bpy
 import os
 import math
@@ -122,6 +123,7 @@ DEFAULT_PALETTE: List[Tuple[int, int, int, int]] = [
     ]
 ]
 
+DEBUG_OUTPUT = False
 
 class VoxelGrid:
     width: int
@@ -178,6 +180,9 @@ class VoxelGrid:
         )
 
     def reduce_voxel_grid_to_hull(self, voxels: List[int or None], outside: List[bool]):
+        if DEBUG_OUTPUT:
+            print('[DEBUG] reduce_voxel_grid_to_hull')
+        timer_start = time.time()
         for z in range(0, self.height):
             last_z = z == self.last_index_z
             first_z = z == 0
@@ -207,6 +212,9 @@ class VoxelGrid:
                             continue
                         # If not connected to the outside space, delete the voxel(inside hull)
                         voxels[index] = None
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
 
     def create_outside_grid(self, voxels: List[int or None]) -> List[int or None]:
         distinct_areas = self.find_distinct_areas(voxels)
@@ -221,6 +229,9 @@ class VoxelGrid:
         """
         connected-component labeling (CCL) with the Hoshen–Kopelman algorithm
         """
+        if DEBUG_OUTPUT:
+            print('[DEBUG] find_distinct_areas')
+        timer_start = time.time()
         labels: List[int] = []
         label_equivalence: Dict[int, Set[int]] = {}
         next_label = 0
@@ -281,9 +292,15 @@ class VoxelGrid:
                     index = self.get_index(x, y, z)
                     if labels[index] in label_map:
                         labels[index] = label_map[labels[index]]
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return labels
 
     def find_outside_indices(self, voxels: List[int or None]) -> Set[int] or None:
+        if DEBUG_OUTPUT:
+            print('[DEBUG] find_outside_indices [%s, %s, %s]' % (self.width, self.depth, self.height))
+        timer_start = time.time()
         outside_indices = set()
         # Collect front/back outside indices
         for z in range(0, self.height):
@@ -312,6 +329,9 @@ class VoxelGrid:
                 index = self.get_index(self.last_index_x, y, z)
                 if voxels[index] is None:
                     outside_indices.add(index)
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return outside_indices if len(outside_indices) > 0 else None
 
 
@@ -402,6 +422,9 @@ class SimpleQuadsMeshing:
     @staticmethod
     def generate_mesh(grid: VoxelGrid, voxels: List[int or None],
                       outside: List[bool]) -> List[Quad]:
+        if DEBUG_OUTPUT:
+            print('[DEBUG] SimpleQuadsMeshing generate_mesh')
+        timer_start = time.time()
         quads: List[Quad] = []
         for x in range(0, grid.width):
             for y in range(0, grid.depth):
@@ -468,6 +491,9 @@ class SimpleQuadsMeshing:
                                 (0, 0, 1),
                                 color_index
                             ))
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return quads
 
 
@@ -475,10 +501,16 @@ class GreedyMeshing:
     @staticmethod
     def generate_mesh(grid: VoxelGrid, voxels: List[int or None],
                       outside: List[bool]) -> List[Quad]:
+        if DEBUG_OUTPUT:
+            print('[DEBUG] GreedyMeshing generate_mesh')
+        timer_start = time.time()
         quads: List[Quad] = []
         GreedyMeshing.mesh_axis(grid, voxels, outside, 0, quads)
         GreedyMeshing.mesh_axis(grid, voxels, outside, 1, quads)
         GreedyMeshing.mesh_axis(grid, voxels, outside, 2, quads)
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return quads
 
     @staticmethod
@@ -993,6 +1025,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "merge_models",
             ),
         )
+        total_timer_start = time.time()
         filepath = keywords['filepath']
         result = self.load_vox(filepath)
         if result is not None:
@@ -1054,6 +1087,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             model_id_object_lookup = {}
             mesh_index = -1
             for mesh in result.meshes:
+                if DEBUG_OUTPUT:
+                    print('[DEBUG] Generate model %s with size [%s, %s, %s]' % (
+                        mesh.model_id, mesh.grid.width, mesh.grid.depth, mesh.grid.height))
                 generated_mesh_models = []
                 mesh_index += 1
                 outside = mesh.grid.create_outside_grid(mesh.voxels)
@@ -1131,6 +1167,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     else:
                         self.report({"WARNING"}, "Unknown meshing type %s" % self.meshing_type)
                         quads = []
+                    if DEBUG_OUTPUT:
+                        print('[DEBUG] generate mesh from faces')
+                    timer_start = time.time()
                     vertices_map: Dict[Tuple[int, int, int], int] = {}
                     vertices: List[Tuple[float, float, float]] = []
                     faces = [
@@ -1145,6 +1184,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     new_mesh = bpy.data.meshes.new("mesh_%s" % mesh_index)
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
+                    timer_end = time.time()
+                    if DEBUG_OUTPUT:
+                        print('[DEBUG] took %s sec' % (timer_end - timer_start))
+                    if DEBUG_OUTPUT:
+                        print('[DEBUG] assign material data')
+                    timer_start = time.time()
                     # Assign the material(s) to the object
                     for material in materials:
                         new_mesh.materials.append(material)
@@ -1185,15 +1230,27 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             face.material_index = color_index_material_map[quads[i].color]
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
                     generated_mesh_models.append(new_object)
+                    timer_end = time.time()
+                    if DEBUG_OUTPUT:
+                        print('[DEBUG] took %s sec' % (timer_end - timer_start))
                 model_id_object_lookup[mesh_index] = generated_mesh_models
 
+            if DEBUG_OUTPUT:
+                print('[DEBUG] recurse hierarchy')
+            timer_start = time.time()
             # Translate generated meshes and associate if requested with node hierarchy
             self.recurse_hierarchy(voxel_collection, result.nodes, result.nodes[0], [], [], model_id_object_lookup)
             # Remove original objects as the hierarchy creates copies
             for model_objects in model_id_object_lookup.values():
                 for model_object in model_objects:
                     bpy.data.objects.remove(model_object)
+            timer_end = time.time()
+            if DEBUG_OUTPUT:
+                print('[DEBUG] took %s sec' % (timer_end - timer_start))
 
+        total_timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] total time %s sec' % (total_timer_end - total_timer_start))
         return {"CANCELLED"} if result is None else {'FINISHED'}
 
     def get_or_create_vertex(self, vertices_map: Dict[Tuple[int, int, int], int],
@@ -1264,7 +1321,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 return None
             version = ImportVOX.read_int32(f)
             model = VoxModel(version)
-            print('MagicaVoxel vox file version %s' % version)
+            if DEBUG_OUTPUT:
+                print('[DEBUG] MagicaVoxel vox file version %s' % version)
             while f.tell() < os.fstat(f.fileno()).st_size:
                 ImportVOX.read_next_chunk(f, model)
         return model
