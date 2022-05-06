@@ -125,6 +125,25 @@ DEFAULT_PALETTE: List[Tuple[int, int, int, int]] = [
 
 DEBUG_OUTPUT = False
 
+
+class SparseArray:
+    def __init__(self, default_value, default_map: Dict or None = None):
+        self.default_value = default_value
+        self.map = default_map if default_map is not None else {}
+
+    def __delitem__(self, key):
+        del self.map[key]
+
+    def __getitem__(self, item):
+        return self.map[item] if item in self.map else self.default_value
+
+    def __setitem__(self, key, value):
+        if value == self.default_value:
+            del self.map[key]
+        else:
+            self.map[key] = value
+
+
 class VoxelGrid:
     width: int
     half_width: float
@@ -179,7 +198,7 @@ class VoxelGrid:
             self.depth if axis_index == 1 else self.height
         )
 
-    def reduce_voxel_grid_to_hull(self, voxels: List[int or None], outside: List[bool]):
+    def reduce_voxel_grid_to_hull(self, voxels: SparseArray, outside: SparseArray or None):
         if DEBUG_OUTPUT:
             print('[DEBUG] reduce_voxel_grid_to_hull')
         timer_start = time.time()
@@ -193,39 +212,47 @@ class VoxelGrid:
                     index = self.get_index(x, y, z)
                     if voxels[index] is not None:
                         # Left
-                        if x == 0 or outside[self.get_index(x - 1, y, z)]:
+                        if x == 0 or (outside is not None and outside[index - 1]):
                             continue
                         # Right
-                        if x == self.last_index_x or outside[self.get_index(x + 1, y, z)]:
+                        if x == self.last_index_x or (outside is not None and outside[index + 1]):
                             continue
                         # Down
-                        if first_y or outside[self.get_index(x, y - 1, z)]:
+                        if first_y or (outside is not None and outside[index - self.y_multiplier]):
                             continue
                         # Up
-                        if last_y or outside[self.get_index(x, y + 1, z)]:
+                        if last_y or (outside is not None and outside[index + self.y_multiplier]):
                             continue
                         # Back
-                        if first_z or outside[self.get_index(x, y, z - 1)]:
+                        if first_z or (outside is not None and outside[index - self.z_multiplier]):
                             continue
                         # Front
-                        if last_z or outside[self.get_index(x, y, z + 1)]:
+                        if last_z or (outside is not None and outside[index + self.z_multiplier]):
                             continue
                         # If not connected to the outside space, delete the voxel(inside hull)
-                        voxels[index] = None
+                        del voxels[index]
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
 
-    def create_outside_grid(self, voxels: List[int or None]) -> List[int or None]:
-        distinct_areas = self.find_distinct_areas(voxels)
+    def create_outside_grid(self, voxels: SparseArray) -> SparseArray or None:
         outside_indices = self.find_outside_indices(voxels)
         if outside_indices is None:
             # All is marked as outside to prevent any faces to be removed
-            return [False] * self.size
-        outside_labels = [distinct_areas[i] for i in outside_indices]
-        return [label in outside_labels for label in distinct_areas]
+            return None
+        distinct_areas = self.find_distinct_areas(voxels)
+        if DEBUG_OUTPUT:
+            print('[DEBUG] create_outside_grid')
+        timer_start = time.time()
+        outside_labels = {distinct_areas[i] for i in outside_indices}
+        outside = SparseArray(False,
+                              {i: True for i in range(len(distinct_areas)) if distinct_areas[i] in outside_labels})
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] create_outside_grid took %s sec' % (timer_end - timer_start))
+        return outside
 
-    def find_distinct_areas(self, voxels: List[int or None]) -> List[int]:
+    def find_distinct_areas(self, voxels: SparseArray) -> List[int]:
         """
         connected-component labeling (CCL) with the Hoshen–Kopelman algorithm
         """
@@ -297,7 +324,7 @@ class VoxelGrid:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return labels
 
-    def find_outside_indices(self, voxels: List[int or None]) -> Set[int] or None:
+    def find_outside_indices(self, voxels: SparseArray) -> Set[int] or None:
         if DEBUG_OUTPUT:
             print('[DEBUG] find_outside_indices [%s, %s, %s]' % (self.width, self.depth, self.height))
         timer_start = time.time()
@@ -354,7 +381,7 @@ class Quad:
 
 class SimpleCubesMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: List[int or None]) -> List[Quad]:
+    def generate_mesh(grid: VoxelGrid, voxels: SparseArray) -> List[Quad]:
         quads: List[Quad] = []
         for x in range(0, grid.width):
             for y in range(0, grid.depth):
@@ -420,8 +447,7 @@ class SimpleCubesMeshing:
 
 class SimpleQuadsMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: List[int or None],
-                      outside: List[bool]) -> List[Quad]:
+    def generate_mesh(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] SimpleQuadsMeshing generate_mesh')
         timer_start = time.time()
@@ -432,7 +458,7 @@ class SimpleQuadsMeshing:
                     color_index = voxels[grid.get_index(x, y, z)]
                     if color_index is not None:
                         # Left
-                        if x == 0 or outside[grid.get_index(x - 1, y, z)]:
+                        if x == 0 or (outside is not None and outside[grid.get_index(x - 1, y, z)]):
                             quads.append(Quad(
                                 (x, y, z),
                                 (x, y + 1, z),
@@ -442,7 +468,7 @@ class SimpleQuadsMeshing:
                                 color_index
                             ))
                         # Right
-                        if x == grid.last_index_x or outside[grid.get_index(x + 1, y, z)]:
+                        if x == grid.last_index_x or (outside is not None and outside[grid.get_index(x + 1, y, z)]):
                             quads.append(Quad(
                                 (x + 1, y, z),
                                 (x + 1, y, z + 1),
@@ -452,7 +478,7 @@ class SimpleQuadsMeshing:
                                 color_index
                             ))
                         # Back
-                        if y == 0 or outside[grid.get_index(x, y - 1, z)]:
+                        if y == 0 or (outside is not None and outside[grid.get_index(x, y - 1, z)]):
                             quads.append(Quad(
                                 (x, y, z),
                                 (x, y, z + 1),
@@ -462,7 +488,7 @@ class SimpleQuadsMeshing:
                                 color_index
                             ))
                         # Front
-                        if y == grid.last_index_y or outside[grid.get_index(x, y + 1, z)]:
+                        if y == grid.last_index_y or (outside is not None and outside[grid.get_index(x, y + 1, z)]):
                             quads.append(Quad(
                                 (x, y + 1, z),
                                 (x + 1, y + 1, z),
@@ -472,7 +498,7 @@ class SimpleQuadsMeshing:
                                 color_index
                             ))
                         # Bottom
-                        if z == 0 or outside[grid.get_index(x, y, z - 1)]:
+                        if z == 0 or (outside is not None and outside[grid.get_index(x, y, z - 1)]):
                             quads.append(Quad(
                                 (x, y, z),
                                 (x + 1, y, z),
@@ -482,7 +508,7 @@ class SimpleQuadsMeshing:
                                 color_index
                             ))
                         # Top
-                        if z == grid.last_index_z or outside[grid.get_index(x, y, z + 1)]:
+                        if z == grid.last_index_z or (outside is not None and outside[grid.get_index(x, y, z + 1)]):
                             quads.append(Quad(
                                 (x, y, z + 1),
                                 (x, y + 1, z + 1),
@@ -499,8 +525,7 @@ class SimpleQuadsMeshing:
 
 class GreedyMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: List[int or None],
-                      outside: List[bool]) -> List[Quad]:
+    def generate_mesh(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] GreedyMeshing generate_mesh')
         timer_start = time.time()
@@ -514,8 +539,8 @@ class GreedyMeshing:
         return quads
 
     @staticmethod
-    def mesh_axis(grid: VoxelGrid, voxels: List[int or None],
-                  outside: List[bool], axis_index: int, quads: List[Quad]):
+    def mesh_axis(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None, axis_index: int,
+                  quads: List[Quad]):
         axis1_index = 1 if axis_index == 0 else (2 if axis_index == 1 else 0)
         axis2_index = 2 if axis_index == 0 else (0 if axis_index == 1 else 1)
         get_index = grid.get_index_func(axis_index, axis1_index, axis2_index)
@@ -552,12 +577,14 @@ class GreedyMeshing:
                         # might be different, and we gather only the outer shell
                         for visited_index in range(0, 2):
                             if not visited[visited_index][visited_start_index]:
-                                if has_offset[visited_index] and \
-                                        not outside[get_index(a + normal_offsets[visited_index], b, c)]:
-                                    visited[visited_index][visited_start_index] = True
-                                    continue
+                                a_back = a + normal_offsets[visited_index]
+                                if has_offset[visited_index]:
+                                    if outside is None or not outside[get_index(a_back, b, c)]:
+                                        visited[visited_index][visited_start_index] = True
+                                        continue
                                 # Move first axis until end or voxel mismatch
                                 end_index_axis1 = b
+                                found_end_axis1 = False
                                 for i in range(b + 1, grid.get_axis(axis1_index)):
                                     iter_visited_index = i * grid.get_axis(axis2_index) + c
                                     iter_index = get_index(a, i, c)
@@ -570,15 +597,16 @@ class GreedyMeshing:
                                             # ...or different color...
                                             start_voxel != iter_voxel or
                                             # ... or not connected to the outside space
-                                            (has_offset[visited_index] and
-                                             not outside[
-                                                 get_index(a + normal_offsets[visited_index], i, c)
-                                             ])
+                                            (has_offset[visited_index] and (outside is None or not outside[get_index(a_back, i, c)]))
                                     ):
                                         end_index_axis1 = i - 1
+                                        found_end_axis1 = True
                                         break
+                                if not found_end_axis1:
+                                    end_index_axis1 = grid.get_axis(axis1_index) - 1
                                 # Move second axis until end or voxel row mismatch
                                 end_index_axis2 = c
+                                found_end_axis2 = False
                                 for j in range(c + 1, grid.get_axis(axis2_index)):
                                     any_mismatch_in_row = False
                                     for i in range(b, end_index_axis1 + 1):
@@ -593,16 +621,16 @@ class GreedyMeshing:
                                                 # ...or different color...
                                                 start_voxel != iter_voxel or
                                                 # ... or not connected to the outside space
-                                                (has_offset[visited_index] and
-                                                 not outside[
-                                                     get_index(a + normal_offsets[visited_index], i, j)
-                                                 ])
+                                                (has_offset[visited_index] and (outside is None or not outside[get_index(a_back, i, j)]))
                                         ):
                                             any_mismatch_in_row = True
                                             break
                                     if any_mismatch_in_row:
                                         end_index_axis2 = j - 1
+                                        found_end_axis2 = True
                                         break
+                                if not found_end_axis2:
+                                    end_index_axis2 = grid.get_axis(axis2_index) - 1
                                 # Mark area as visited
                                 for i in range(b, end_index_axis1 + 1):
                                     for j in range(c, end_index_axis2 + 1):
@@ -713,7 +741,7 @@ class VoxMesh:
     def __init__(self, model_id: int, width: int, depth: int, height: int):
         self.model_id = model_id
         self.grid: VoxelGrid = VoxelGrid(width, depth, height)
-        self.voxels: List[int or None] = [None] * width * depth * height
+        self.voxels = SparseArray(None)
         self.used_color_indices: Set[int] = set()
 
     def set_voxel_color_index(self, x: int, y: int, z: int, color_index: int):
