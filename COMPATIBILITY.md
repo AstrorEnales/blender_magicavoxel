@@ -12,7 +12,7 @@
 |            0.99.4.2 | not tested yet |
 |            0.99.4.1 | not tested yet |
 |              0.99.4 | not tested yet |
-|              0.99.3 | not tested yet |
+|              0.99.3 |       ✅        |
 |              0.99.2 | not tested yet |
 |              0.99.1 | not tested yet |
 |                0.99 | not tested yet |
