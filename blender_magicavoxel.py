@@ -257,80 +257,67 @@ class VoxelGrid:
             print('[DEBUG] create_outside_grid')
         timer_start = time.time()
         outside_labels = {distinct_areas[i] for i in outside_indices}
-        outside = SparseArray(False,
-                              {i: True for i in range(len(distinct_areas)) if distinct_areas[i] in outside_labels})
+        outside = SparseArray(False, {i: True for i in range(self.size) if distinct_areas[i] in outside_labels})
         timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] create_outside_grid took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return outside
 
     def find_distinct_areas(self, voxels: SparseArray) -> List[int]:
         """
         connected-component labeling (CCL) with the Hoshen–Kopelman algorithm
+        modified to label all voxels -1 as we're only interested in non-voxel labels
         """
         if DEBUG_OUTPUT:
             print('[DEBUG] find_distinct_areas')
         timer_start = time.time()
-        labels: List[int] = []
-        label_equivalence: Dict[int, Set[int]] = {}
+        labels: List[int] = [-1] * self.size
+        equivalence_sets: List[Set[int]] = []
         next_label = 0
         for z in range(0, self.height):
             for y in range(0, self.depth):
                 for x in range(0, self.width):
                     index = self.get_index(x, y, z)
-                    value = voxels[index] is not None
-                    left_index = self.get_index(x - 1, y, z)
-                    left_value = voxels[left_index] is not None if x > 0 else -1
-                    back_index = self.get_index(x, y - 1, z)
-                    back_value = voxels[back_index] is not None if y > 0 else -1
-                    down_index = self.get_index(x, y, z - 1)
-                    down_value = voxels[down_index] is not None if z > 0 else -1
-                    possible_labels: Set[int] = set()
-                    if value == left_value:
-                        possible_labels.add(labels[left_index])
-                    if value == back_value:
-                        possible_labels.add(labels[back_index])
-                    if value == down_value:
-                        possible_labels.add(labels[down_index])
-                    if len(possible_labels) == 0:
-                        labels.append(next_label)
-                        next_label += 1
-                    elif len(possible_labels) == 1:
-                        labels.append(list(possible_labels)[0])
-                    else:
-                        min_label = min(possible_labels)
-                        labels.append(min_label)
-                        for label in possible_labels:
-                            if label not in label_equivalence:
-                                label_equivalence[label] = set()
-                            for other_label in possible_labels:
-                                if other_label != label:
-                                    label_equivalence[label].add(other_label)
+                    if voxels[index] is not None:
+                        possible_labels: Set[int] = set()
+                        if x > 0:
+                            left_index = self.get_index(x - 1, y, z)
+                            if voxels[left_index] is None:
+                                possible_labels.add(labels[left_index])
+                        if y > 0:
+                            back_index = self.get_index(x, y - 1, z)
+                            if voxels[back_index] is None:
+                                possible_labels.add(labels[back_index])
+                        if z > 0:
+                            down_index = self.get_index(x, y, z - 1)
+                            if voxels[down_index] is None:
+                                possible_labels.add(labels[down_index])
+                        if len(possible_labels) == 0:
+                            labels[index] = next_label
+                            next_label += 1
+                        elif len(possible_labels) == 1:
+                            labels[index] = next(iter(possible_labels))
+                        else:
+                            labels[index] = min(possible_labels)
+                            equivalence_sets.append(possible_labels)
+        # Collapse all overlapping sets until nothing changes anymore
         count = 0
-        while count != len(label_equivalence):
-            count = len(label_equivalence)
-            for label in [i for i in label_equivalence.keys()]:
-                connections = [x for x in label_equivalence[label]]
-                min_label = min(connections)
-                if min_label < label:
-                    del label_equivalence[label]
-                    for connected_label in connections:
-                        if connected_label in label_equivalence:
-                            next_connections = label_equivalence[connected_label]
-                            for j in range(0, len(connections)):
-                                if connections[j] != connected_label:
-                                    next_connections.add(connections[j])
-        label_map: Dict[int, int] = {}
-        for label in range(0, next_label):
-            if label in label_equivalence:
-                for connection in label_equivalence[label]:
-                    label_map[connection] = label
-        for z in range(0, self.height):
-            for y in range(0, self.depth):
-                for x in range(0, self.width):
-                    index = self.get_index(x, y, z)
-                    if labels[index] in label_map:
-                        labels[index] = label_map[labels[index]]
+        while count != len(equivalence_sets):
+            count = len(equivalence_sets)
+            i = 0
+            while i < len(equivalence_sets):
+                s = equivalence_sets[i]
+                for j in range(len(equivalence_sets) - 1, i, -1):
+                    if not s.isdisjoint(equivalence_sets[j]):
+                        s.update(equivalence_sets[j])
+                        del equivalence_sets[j]
+                i += 1
+        # Change all labels to the minimum of the equivalence set they belong to
+        for s in equivalence_sets:
+            min_label = min(s)
+            for i in range(0, self.size):
+                if labels[i] in s:
+                    labels[i] = min_label
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
