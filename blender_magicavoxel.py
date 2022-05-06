@@ -124,6 +124,8 @@ DEFAULT_PALETTE: List[Tuple[int, int, int, int]] = [
 ]
 
 DEBUG_OUTPUT = False
+READ_INT_UNPACK = struct.Struct('<i').unpack
+READ_FLOAT_UNPACK = struct.Struct('<f').unpack
 
 
 class SparseArray:
@@ -219,22 +221,22 @@ class VoxelGrid:
                         index = self.get_index(x, y, z)
                         if voxels[index] is not None:
                             # Left
-                            if x == 0 or (outside is not None and outside[index - 1]):
+                            if x == 0 or outside[index - 1]:
                                 continue
                             # Right
-                            if x == self.last_index_x or (outside is not None and outside[index + 1]):
+                            if x == self.last_index_x or outside[index + 1]:
                                 continue
                             # Down
-                            if first_y or (outside is not None and outside[index - self.y_multiplier]):
+                            if first_y or outside[index - self.y_multiplier]:
                                 continue
                             # Up
-                            if last_y or (outside is not None and outside[index + self.y_multiplier]):
+                            if last_y or outside[index + self.y_multiplier]:
                                 continue
                             # Back
-                            if first_z or (outside is not None and outside[index - self.z_multiplier]):
+                            if first_z or outside[index - self.z_multiplier]:
                                 continue
                             # Front
-                            if last_z or (outside is not None and outside[index + self.z_multiplier]):
+                            if last_z or outside[index + self.z_multiplier]:
                                 continue
                             # If not connected to the outside space, delete the voxel(inside hull)
                             del voxels[index]
@@ -1384,15 +1386,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_int32(f: IO) -> int:
-        return struct.unpack('<i', f.read(4))[0]
+        return READ_INT_UNPACK(f.read(4))[0]
 
     @staticmethod
     def read_float32(f: IO) -> int:
-        return struct.unpack('<f', f.read(4))[0]
-
-    @staticmethod
-    def read_uint8(f: IO) -> int:
-        return struct.unpack('B', f.read(1))[0]
+        return READ_FLOAT_UNPACK(f.read(4))[0]
 
     @staticmethod
     def read_string(f: IO) -> str:
@@ -1426,14 +1424,13 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     @staticmethod
     def read_xyzi_chunk(f: IO, model: VoxModel):
         num_voxels = ImportVOX.read_int32(f)
-        model.meshes[-1].num_voxels = num_voxels
-        for i in range(0, num_voxels):
-            model.meshes[-1].set_voxel_color_index(
-                ImportVOX.read_uint8(f),
-                ImportVOX.read_uint8(f),
-                ImportVOX.read_uint8(f),
-                ImportVOX.read_uint8(f)
-            )
+        mesh = model.meshes[-1]
+        mesh.num_voxels = num_voxels
+        voxel_data = struct.unpack('%sB' % (num_voxels * 4), f.read(num_voxels * 4))
+        mesh.voxels = SparseArray(None, {
+            mesh.grid.get_index(voxel_data[i], voxel_data[i + 1], voxel_data[i + 2]): voxel_data[i + 3]
+            for i in range(0, num_voxels * 4, 4)
+        })
 
     @staticmethod
     def read_rcam_chunk(f: IO, model: VoxModel):
@@ -1530,12 +1527,10 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     @staticmethod
     def read_rgba_chunk(f: IO, model: VoxModel):
         custom_palette: List[Tuple[int, int, int, int]] = [(0, 0, 0, 255)]
+        color_data = struct.unpack('%sB' % 256 * 4, f.read(256 * 4))
         for i in range(256):
-            r = ImportVOX.read_uint8(f)
-            g = ImportVOX.read_uint8(f)
-            b = ImportVOX.read_uint8(f)
-            a = ImportVOX.read_uint8(f)
-            color = (r, g, b, a)
+            offset = i * 4
+            color = (color_data[offset], color_data[offset + 1], color_data[offset + 2], color_data[offset + 3])
             if i == 255:
                 custom_palette[0] = color
             else:
@@ -1544,7 +1539,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_imap_chunk(f: IO, _: VoxModel):
-        _ = {ImportVOX.read_uint8(f): (i + 1) % 256 for i in range(256)}
+        _ = struct.unpack('%sB' % 256, f.read(256))  # imap_data
+        # _ = {imap_data[i]: (i + 1) % 256 for i in range(256)}
         # IMAP in combination with custom palette is only relevant for showing the palette in MV. Ignored.
 
     @staticmethod
