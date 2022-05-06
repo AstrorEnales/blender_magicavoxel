@@ -55,7 +55,7 @@ from bpy_extras.io_utils import (
 bl_info = {
     "name": "MagicaVoxel VOX format",
     "author": "AstrorEnales",
-    "version": (1, 2, 1),
+    "version": (1, 2, 2),
     "blender": (3, 0, 0),
     "location": "File > Import-Export",
     "description": "Importer for MagicaVoxel VOX files",
@@ -909,7 +909,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     meshing_type: EnumProperty(
         name="Meshing Type",
         items=[
-            ("CUBES_AS_OBJ", "Voxel as Models", "Each Voxel as an individual cube object"),
+            ("CUBES_AS_OBJ", "Voxel as Models (Slow)", "Each Voxel as an individual cube object"),
             ("SIMPLE_CUBES", "Simple Cubes", "Each Voxel as a cube in one mesh"),
             ("SIMPLE_QUADS", "Simple Quads", "Outside facing Voxel faces as quads in one mesh"),
             ("GREEDY", "Greedy", "Outside facing Voxel faces greedy optimized in one mesh")

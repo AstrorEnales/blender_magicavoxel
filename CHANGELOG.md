@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.2](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.2)
+
+  * **[change]** Change default voxel size to 0.1 meters
+  * **[fix]** Fix face vertex order
+  * **[fix]** Fix meshing edge case where the voxel hull splits the grid area
+  * **[feature]** #1 Limit material per color creation to only include used colors
+  * **[feature]** #1 Load remaining material properties in blender compatible ranges
+  * **[feature]** Significantly improve memory footprint using sparse arrays (for unfilled grids)
+  * **[feature]** Improve overall import performance
+
 ## [v1.2.1](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.1)
 
  * **[fix]** Fix read_dict for python versions < 3.8
