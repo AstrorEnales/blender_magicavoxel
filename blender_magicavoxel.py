@@ -132,7 +132,8 @@ class SparseArray:
         self.map = default_map if default_map is not None else {}
 
     def __delitem__(self, key):
-        del self.map[key]
+        if key in self.map:
+            del self.map[key]
 
     def __getitem__(self, item):
         return self.map[item] if item in self.map else self.default_value
@@ -202,40 +203,49 @@ class VoxelGrid:
         if DEBUG_OUTPUT:
             print('[DEBUG] reduce_voxel_grid_to_hull')
         timer_start = time.time()
-        for z in range(0, self.height):
-            last_z = z == self.last_index_z
-            first_z = z == 0
-            for y in range(0, self.depth):
-                last_y = y == self.last_index_y
-                first_y = y == 0
-                for x in range(0, self.width):
-                    index = self.get_index(x, y, z)
-                    if voxels[index] is not None:
-                        # Left
-                        if x == 0 or (outside is not None and outside[index - 1]):
-                            continue
-                        # Right
-                        if x == self.last_index_x or (outside is not None and outside[index + 1]):
-                            continue
-                        # Down
-                        if first_y or (outside is not None and outside[index - self.y_multiplier]):
-                            continue
-                        # Up
-                        if last_y or (outside is not None and outside[index + self.y_multiplier]):
-                            continue
-                        # Back
-                        if first_z or (outside is not None and outside[index - self.z_multiplier]):
-                            continue
-                        # Front
-                        if last_z or (outside is not None and outside[index + self.z_multiplier]):
-                            continue
-                        # If not connected to the outside space, delete the voxel(inside hull)
-                        del voxels[index]
+        if outside is None:
+            for z in range(1, self.height - 1):
+                for y in range(1, self.depth - 1):
+                    for x in range(1, self.width - 1):
+                        del voxels[self.get_index(x, y, z)]
+        else:
+            for z in range(0, self.height):
+                last_z = z == self.last_index_z
+                first_z = z == 0
+                for y in range(0, self.depth):
+                    last_y = y == self.last_index_y
+                    first_y = y == 0
+                    for x in range(0, self.width):
+                        index = self.get_index(x, y, z)
+                        if voxels[index] is not None:
+                            # Left
+                            if x == 0 or (outside is not None and outside[index - 1]):
+                                continue
+                            # Right
+                            if x == self.last_index_x or (outside is not None and outside[index + 1]):
+                                continue
+                            # Down
+                            if first_y or (outside is not None and outside[index - self.y_multiplier]):
+                                continue
+                            # Up
+                            if last_y or (outside is not None and outside[index + self.y_multiplier]):
+                                continue
+                            # Back
+                            if first_z or (outside is not None and outside[index - self.z_multiplier]):
+                                continue
+                            # Front
+                            if last_z or (outside is not None and outside[index + self.z_multiplier]):
+                                continue
+                            # If not connected to the outside space, delete the voxel(inside hull)
+                            del voxels[index]
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
 
-    def create_outside_grid(self, voxels: SparseArray) -> SparseArray or None:
+    def create_outside_grid(self, voxels: SparseArray, num_voxels: int) -> SparseArray or None:
+        if num_voxels == self.size:
+            # If we have a filled grid we already know there to exist no outside
+            return None
         outside_indices = self.find_outside_indices(voxels)
         if outside_indices is None:
             # All is marked as outside to prevent any faces to be removed
@@ -597,7 +607,8 @@ class GreedyMeshing:
                                             # ...or different color...
                                             start_voxel != iter_voxel or
                                             # ... or not connected to the outside space
-                                            (has_offset[visited_index] and (outside is None or not outside[get_index(a_back, i, c)]))
+                                            (has_offset[visited_index] and (
+                                                    outside is None or not outside[get_index(a_back, i, c)]))
                                     ):
                                         end_index_axis1 = i - 1
                                         found_end_axis1 = True
@@ -621,7 +632,8 @@ class GreedyMeshing:
                                                 # ...or different color...
                                                 start_voxel != iter_voxel or
                                                 # ... or not connected to the outside space
-                                                (has_offset[visited_index] and (outside is None or not outside[get_index(a_back, i, j)]))
+                                                (has_offset[visited_index] and (
+                                                        outside is None or not outside[get_index(a_back, i, j)]))
                                         ):
                                             any_mismatch_in_row = True
                                             break
@@ -740,6 +752,7 @@ class VoxMaterial:
 class VoxMesh:
     def __init__(self, model_id: int, width: int, depth: int, height: int):
         self.model_id = model_id
+        self.num_voxels = 0
         self.grid: VoxelGrid = VoxelGrid(width, depth, height)
         self.voxels = SparseArray(None)
         self.used_color_indices: Set[int] = set()
@@ -1055,7 +1068,13 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         )
         total_timer_start = time.time()
         filepath = keywords['filepath']
+        if DEBUG_OUTPUT:
+            print('[DEBUG] load raw data')
+        timer_start = time.time()
         result = self.load_vox(filepath)
+        timer_end = time.time()
+        if DEBUG_OUTPUT:
+            print('[DEBUG] took %s sec' % (timer_end - timer_start))
         if result is not None:
             collection_name = os.path.basename(filepath)
             view_layer = context.view_layer
@@ -1120,7 +1139,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         mesh.model_id, mesh.grid.width, mesh.grid.depth, mesh.grid.height))
                 generated_mesh_models = []
                 mesh_index += 1
-                outside = mesh.grid.create_outside_grid(mesh.voxels)
+                # Skip empty models
+                if mesh.num_voxels == 0:
+                    model_id_object_lookup[mesh_index] = []
+                    continue
+                outside = mesh.grid.create_outside_grid(mesh.voxels, mesh.num_voxels)
                 # =====================================================
                 # CUBES_AS_OBJ
                 # =====================================================
@@ -1403,6 +1426,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
     @staticmethod
     def read_xyzi_chunk(f: IO, model: VoxModel):
         num_voxels = ImportVOX.read_int32(f)
+        model.meshes[-1].num_voxels = num_voxels
         for i in range(0, num_voxels):
             model.meshes[-1].set_voxel_color_index(
                 ImportVOX.read_uint8(f),
