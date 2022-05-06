@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.2.3](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.3)
+
+  * **[feature]** Performance improvements
+
 ## [v1.2.2](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.2)
 
   * **[change]** Change default voxel size to 0.1 meters
