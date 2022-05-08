@@ -1076,6 +1076,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     mode = camera["_mode"] if "_mode" in camera else "pers"
                     blender_modes = {
                         "pers": "PERSP",
+                        "free": "PERSP",
                         "pano": "PANO",
                         "orth": "ORTHO",
                         "iso": "ORTHO"
