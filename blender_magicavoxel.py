@@ -1073,42 +1073,46 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             if self.import_cameras:
                 for camera_id in result.cameras:
                     camera = result.cameras[camera_id]
+                    mode = camera["_mode"] if "_mode" in camera else "pers"
+                    blender_modes = {
+                        "pers": "PERSP",
+                        "pano": "PANO",
+                        "orth": "ORTHO",
+                        "iso": "ORTHO"
+                    }
+                    if mode not in blender_modes:
+                        self.report({"WARNING"}, "Camera %s mode '%s' is not supported, skipping" % (camera_id, mode))
+                        continue
                     camera_data = bpy.data.cameras.new(name="camera_%s" % camera_id)
+                    camera_data.type = blender_modes[mode]
                     if "_fov" in camera:
                         camera_data.angle = math.radians(float(camera["_fov"]))
-                    if "_mode" in camera:
-                        mode = camera["_mode"]
-                        blender_modes = {
-                            'pers': 'PERSP',
-                            'pano': 'PANO',
-                            'orth': 'ORTHO',
-                            'sg': 'PERSP',  # TODO
-                            'iso': 'ORTHO'  # TODO
-                        }
-                        if mode == "sg":
-                            self.report({"WARNING"},
-                                        "Camera %s mode 'sg' is not supported, fallback to 'pers'" % camera_id)
-                        camera_data.type = blender_modes[mode] if mode in blender_modes else "PERSP"
                     camera_object = bpy.data.objects.new("camera_%s" % camera_id, camera_data)
                     rotation = mathutils.Vector((0, 0, 0))
+                    roll = 0
                     target = mathutils.Vector((0, 0, 0))
                     radius = 1
-                    # Camera orientation: pitch, yaw, roll
-                    if "_angle" in camera:
-                        pitch, yaw, roll = (math.radians(float(x.strip())) for x in camera["_angle"].split(" "))
-                        rotation = mathutils.Vector((yaw, roll, pitch))
                     # Camera target
                     if "_focus" in camera:
-                        target = mathutils.Vector((float(x.strip()) for x in camera["_focus"].split(" ")))
+                        target = mathutils.Vector(
+                            (float(x.strip()) * self.voxel_size for x in camera["_focus"].split(" ")))
+                    # Camera distance
                     if "_radius" in camera:
                         radius = float(camera["_radius"])
-                    camera_object.rotation_euler = rotation
+                    # Camera orientation: pitch, yaw, roll
+                    if "_angle" in camera:
+                        pitch, yaw, roll = (float(x.strip()) for x in camera["_angle"].split(" "))
+                        pitch = math.radians(pitch)
+                        yaw = -math.radians(-yaw if yaw <= 180 else (360 - yaw))
+                        roll = -math.radians(-roll if roll <= 180 else (360 - roll))
+                        rotation = mathutils.Vector((pitch, 0, yaw))
                     rotation_matrix = mathutils.Euler(rotation).to_matrix()
                     rotation_matrix.resize_4x4()
-                    radius = 40
-                    camera_object.location = target - (rotation_matrix @ mathutils.Matrix.Translation(
-                        mathutils.Vector((0, radius, 0)))).to_translation()
-                    # TODO: {'_frustum': '0.414214'}
+                    position = target + (rotation_matrix @ mathutils.Matrix.Translation(
+                        mathutils.Vector((0, -radius * self.voxel_size, 0)))).to_translation()
+                    camera_object.rotation_euler = rotation + mathutils.Vector((math.pi * 0.5, 0, 0))
+                    camera_object.rotation_euler.rotate_axis("Z", roll)
+                    camera_object.location = position
                     voxel_collection.objects.link(camera_object)
             # Create materials depending on the selected material mode
             materials = []
@@ -1664,7 +1668,7 @@ classes = (
     ImportVOX,
     VOX_PT_import_geometry,
     VOX_PT_import_materials,
-    # TODO VOX_PT_import_cameras,
+    VOX_PT_import_cameras,
 )
 
 
