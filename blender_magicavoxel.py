@@ -1312,12 +1312,15 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         next_path = path + [node.node_id]
         next_path_objects = list(path_objects)
         if node.type == 'GRP':
+            parent_transform_attributes = nodes[path[-1]].node_attributes
+            group_name = parent_transform_attributes[
+                '_name'] if '_name' in parent_transform_attributes else 'grp_%s' % node.node_id
             if self.import_hierarchy:
                 transform_node = nodes[path[-1]]
                 # TODO: frame
                 translation = transform_node.get_transform_translation(0, self.voxel_size)
                 rotation = transform_node.get_transform_rotation(0)
-                group_data = bpy.data.objects.new("grp_%s" % node.node_id, None)
+                group_data = bpy.data.objects.new(group_name, None)
                 group_data.empty_display_size = 1
                 group_data.empty_display_type = 'PLAIN_AXES'
                 group_data.matrix_local = translation @ rotation
@@ -1326,11 +1329,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 if len(path_objects) > 0:
                     group_data.parent = path_objects[-1]
         elif node.type == 'SHP':
+            parent_transform_attributes = nodes[path[-1]].node_attributes
             for model_id in node.meshes:
+                model_name = parent_transform_attributes[
+                    '_name'] if '_name' in parent_transform_attributes else 'model_%s' % model_id
                 shape_objects = [x.copy() for x in model_id_object_lookup[model_id]]
                 for shape_object in shape_objects:
                     voxel_collection.objects.link(shape_object)
-                    shape_object.name = 'model_%s' % model_id
+                    shape_object.name = model_name
                     if self.import_hierarchy:
                         shape_object.parent = next_path_objects[-1]
                     mesh_attributes = node.meshes[model_id]
