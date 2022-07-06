@@ -524,22 +524,23 @@ class SimpleQuadsMeshing:
 
 class GreedyMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None) -> List[Quad]:
+    def generate_mesh(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None,
+                      ignore_color: bool = False) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] GreedyMeshing generate_mesh')
         timer_start = time.time()
         quads: List[Quad] = []
-        GreedyMeshing.mesh_axis(grid, voxels, outside, 0, quads)
-        GreedyMeshing.mesh_axis(grid, voxels, outside, 1, quads)
-        GreedyMeshing.mesh_axis(grid, voxels, outside, 2, quads)
+        GreedyMeshing.mesh_axis(grid, voxels, outside, ignore_color, 0, quads)
+        GreedyMeshing.mesh_axis(grid, voxels, outside, ignore_color, 1, quads)
+        GreedyMeshing.mesh_axis(grid, voxels, outside, ignore_color, 2, quads)
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return quads
 
     @staticmethod
-    def mesh_axis(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None, axis_index: int,
-                  quads: List[Quad]):
+    def mesh_axis(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None, ignore_color: bool,
+                  axis_index: int, quads: List[Quad]):
         axis1_index = 1 if axis_index == 0 else (2 if axis_index == 1 else 0)
         axis2_index = 2 if axis_index == 0 else (0 if axis_index == 1 else 1)
         get_index = grid.get_index_func(axis_index, axis1_index, axis2_index)
@@ -588,13 +589,14 @@ class GreedyMeshing:
                                     iter_visited_index = i * grid.get_axis(axis2_index) + c
                                     iter_index = get_index(a, i, c)
                                     iter_voxel = voxels[iter_index]
+                                    is_color_not_equal = not ignore_color and start_voxel != iter_voxel
                                     if (
                                             # No voxel found...
                                             iter_voxel is None or
                                             # ...or already visited...
                                             visited[visited_index][iter_visited_index] or
                                             # ...or different color...
-                                            start_voxel != iter_voxel or
+                                            is_color_not_equal or
                                             # ... or not connected to the outside space
                                             (has_offset[visited_index] and (
                                                     outside is None or not outside[get_index(a_back, i, c)]))
@@ -613,13 +615,14 @@ class GreedyMeshing:
                                         iter_visited_index = i * grid.get_axis(axis2_index) + j
                                         iter_index = get_index(a, i, j)
                                         iter_voxel = voxels[iter_index]
+                                        is_color_not_equal = not ignore_color and start_voxel != iter_voxel
                                         if (
                                                 # No voxel found...
                                                 iter_voxel is None or
                                                 # ...or already visited...
                                                 visited[visited_index][iter_visited_index] or
                                                 # ...or different color...
-                                                start_voxel != iter_voxel or
+                                                is_color_not_equal or
                                                 # ... or not connected to the outside space
                                                 (has_offset[visited_index] and (
                                                         outside is None or not outside[get_index(a_back, i, j)]))
@@ -1201,7 +1204,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 else:
                     if self.meshing_type == "GREEDY":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
-                        quads = GreedyMeshing.generate_mesh(mesh.grid, mesh.voxels, outside)
+                        ignore_color = self.material_mode == "NONE"
+                        quads = GreedyMeshing.generate_mesh(mesh.grid, mesh.voxels, outside, ignore_color)
                     elif self.meshing_type == "SIMPLE_QUADS":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
                         quads = SimpleQuadsMeshing.generate_mesh(mesh.grid, mesh.voxels, outside)
