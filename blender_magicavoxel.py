@@ -278,7 +278,7 @@ class VoxelGrid:
             for y in range(0, self.depth):
                 for x in range(0, self.width):
                     index = self.get_index(x, y, z)
-                    if voxels[index] is not None:
+                    if voxels[index] is None:
                         possible_labels: Set[int] = set()
                         if x > 0:
                             left_index = self.get_index(x - 1, y, z)
