@@ -1287,12 +1287,19 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             if DEBUG_OUTPUT:
                 print('[DEBUG] recurse hierarchy')
             timer_start = time.time()
-            # Translate generated meshes and associate if requested with node hierarchy
-            self.recurse_hierarchy(voxel_collection, result.nodes, result.nodes[0], [], [], model_id_object_lookup)
-            # Remove original objects as the hierarchy creates copies
-            for model_objects in model_id_object_lookup.values():
-                for model_object in model_objects:
-                    bpy.data.objects.remove(model_object)
+            if len(result.nodes) == 0:
+                # If we have a file without hierarchy, just add the models to the collection
+                for model_objects in model_id_object_lookup.values():
+                    for model_object in model_objects:
+                        model_object.name = 'model'
+                        voxel_collection.objects.link(model_object)
+            else:
+                # Translate generated meshes and associate if requested with node hierarchy
+                self.recurse_hierarchy(voxel_collection, result.nodes, result.nodes[0], [], [], model_id_object_lookup)
+                # Remove original objects as the hierarchy creates copies
+                for model_objects in model_id_object_lookup.values():
+                    for model_object in model_objects:
+                        bpy.data.objects.remove(model_object)
             timer_end = time.time()
             if DEBUG_OUTPUT:
                 print('[DEBUG] took %s sec' % (timer_end - timer_start))
