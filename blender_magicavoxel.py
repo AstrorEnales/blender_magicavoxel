@@ -459,10 +459,10 @@ class SimpleQuadsMeshing:
                         # Left
                         if x == 0 or (outside is not None and outside[grid.get_index(x - 1, y, z)]):
                             quads.append(Quad(
-                                (x, y, z),
                                 (x, y + 1, z),
                                 (x, y + 1, z + 1),
                                 (x, y, z + 1),
+                                (x, y, z),
                                 (-1, 0, 0),
                                 color_index
                             ))
@@ -489,20 +489,20 @@ class SimpleQuadsMeshing:
                         # Front
                         if y == grid.last_index_y or (outside is not None and outside[grid.get_index(x, y + 1, z)]):
                             quads.append(Quad(
-                                (x, y + 1, z),
                                 (x + 1, y + 1, z),
                                 (x + 1, y + 1, z + 1),
                                 (x, y + 1, z + 1),
+                                (x, y + 1, z),
                                 (0, 1, 0),
                                 color_index
                             ))
                         # Bottom
                         if z == 0 or (outside is not None and outside[grid.get_index(x, y, z - 1)]):
                             quads.append(Quad(
+                                (x, y + 1, z),
                                 (x, y, z),
                                 (x + 1, y, z),
                                 (x + 1, y + 1, z),
-                                (x, y + 1, z),
                                 (0, 0, -1),
                                 color_index
                             ))
@@ -541,8 +541,8 @@ class GreedyMeshing:
     @staticmethod
     def mesh_axis(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None, ignore_color: bool,
                   axis_index: int, quads: List[Quad]):
-        axis1_index = 1 if axis_index == 0 else (2 if axis_index == 1 else 0)
-        axis2_index = 2 if axis_index == 0 else (0 if axis_index == 1 else 1)
+        axis1_index = 1 if axis_index == 0 else 0
+        axis2_index = 1 if axis_index == 2 else 2
         get_index = grid.get_index_func(axis_index, axis1_index, axis2_index)
         get_vector = GreedyMeshing.get_vector_func(axis_index, axis1_index, axis2_index)
         normals: List[Tuple[float, float, float]] = [
@@ -640,22 +640,74 @@ class GreedyMeshing:
                                     for j in range(c, end_index_axis2 + 1):
                                         visited[visited_index][i * grid.get_axis(axis2_index) + j] = True
                                 # Store quad
-                                quad = Quad()
-                                quad.p1 = get_vector(a, b, c) \
-                                    if visited_index == 0 \
-                                    else get_vector(a + 1, b, c)
-                                quad.p2 = get_vector(a, end_index_axis1 + 1, c) \
-                                    if visited_index == 0 \
-                                    else get_vector(a + 1, b, end_index_axis2 + 1)
-                                quad.p3 = get_vector(a, end_index_axis1 + 1, end_index_axis2 + 1) \
-                                    if visited_index == 0 \
-                                    else get_vector(a + 1, end_index_axis1 + 1, end_index_axis2 + 1)
-                                quad.p4 = get_vector(a, b, end_index_axis2 + 1) \
-                                    if visited_index == 0 \
-                                    else get_vector(a + 1, end_index_axis1 + 1, c)
-                                quad.color = start_voxel
-                                quad.normal = normals[visited_index]
+                                a_visited = a if visited_index == 0 else a + 1
+                                p1 = get_vector(a_visited, b, c)
+                                p2 = get_vector(a_visited, end_index_axis1 + 1, c)
+                                p3 = get_vector(a_visited, end_index_axis1 + 1, end_index_axis2 + 1)
+                                p4 = get_vector(a_visited, b, end_index_axis2 + 1)
+                                quad = GreedyMeshing.build_quad(p1, p2, p3, p4, normals[visited_index], start_voxel)
                                 quads.append(quad)
+
+    @staticmethod
+    def build_quad(p1, p2, p3, p4, normal, color) -> Quad:
+        quad = Quad()
+        quad.normal = normal
+        quad.color = color
+        if normal[0] < 0:
+            y = min(p1[1], p2[1], p3[1], p4[1])
+            yw = max(p1[1], p2[1], p3[1], p4[1])
+            z = min(p1[2], p2[2], p3[2], p4[2])
+            zh = max(p1[2], p2[2], p3[2], p4[2])
+            quad.p1 = (p1[0], yw, z)
+            quad.p2 = (p1[0], yw, zh)
+            quad.p3 = (p1[0], y, zh)
+            quad.p4 = (p1[0], y, z)
+        elif normal[0] > 0:
+            y = min(p1[1], p2[1], p3[1], p4[1])
+            yw = max(p1[1], p2[1], p3[1], p4[1])
+            z = min(p1[2], p2[2], p3[2], p4[2])
+            zh = max(p1[2], p2[2], p3[2], p4[2])
+            quad.p1 = (p1[0], y, z)
+            quad.p2 = (p1[0], y, zh)
+            quad.p3 = (p1[0], yw, zh)
+            quad.p4 = (p1[0], yw, z)
+        elif normal[1] < 0:
+            x = min(p1[0], p2[0], p3[0], p4[0])
+            xw = max(p1[0], p2[0], p3[0], p4[0])
+            z = min(p1[2], p2[2], p3[2], p4[2])
+            zh = max(p1[2], p2[2], p3[2], p4[2])
+            quad.p1 = (x, p1[1], z)
+            quad.p2 = (x, p1[1], zh)
+            quad.p3 = (xw, p1[1], zh)
+            quad.p4 = (xw, p1[1], z)
+        elif normal[1] > 0:
+            x = min(p1[0], p2[0], p3[0], p4[0])
+            xw = max(p1[0], p2[0], p3[0], p4[0])
+            z = min(p1[2], p2[2], p3[2], p4[2])
+            zh = max(p1[2], p2[2], p3[2], p4[2])
+            quad.p1 = (xw, p1[1], z)
+            quad.p2 = (xw, p1[1], zh)
+            quad.p3 = (x, p1[1], zh)
+            quad.p4 = (x, p1[1], z)
+        elif normal[2] < 0:
+            x = min(p1[0], p2[0], p3[0], p4[0])
+            xw = max(p1[0], p2[0], p3[0], p4[0])
+            y = min(p1[1], p2[1], p3[1], p4[1])
+            yh = max(p1[1], p2[1], p3[1], p4[1])
+            quad.p1 = (x, yh, p1[2])
+            quad.p2 = (x, y, p1[2])
+            quad.p3 = (xw, y, p1[2])
+            quad.p4 = (xw, yh, p1[2])
+        elif normal[2] > 0:
+            x = min(p1[0], p2[0], p3[0], p4[0])
+            xw = max(p1[0], p2[0], p3[0], p4[0])
+            y = min(p1[1], p2[1], p3[1], p4[1])
+            yh = max(p1[1], p2[1], p3[1], p4[1])
+            quad.p1 = (x, y, p1[2])
+            quad.p2 = (x, yh, p1[2])
+            quad.p3 = (xw, yh, p1[2])
+            quad.p4 = (xw, y, p1[2])
+        return quad
 
     @staticmethod
     def get_vector_func(axis_index: int, axis1_index: int, axis2_index: int):
