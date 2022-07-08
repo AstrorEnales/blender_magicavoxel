@@ -41,6 +41,7 @@ import os
 import math
 import mathutils
 import struct
+from functools import cmp_to_key
 from typing import IO, List, Dict, Tuple, Set
 from bpy.props import (
     StringProperty,
@@ -126,6 +127,156 @@ DEFAULT_PALETTE: List[Tuple[int, int, int, int]] = [
 DEBUG_OUTPUT = False
 READ_INT_UNPACK = struct.Struct('<i').unpack
 READ_FLOAT_UNPACK = struct.Struct('<f').unpack
+
+
+class RectanglePacker:
+    """
+    Rectangle packer translated from Javier Arevalo
+    https://www.flipcode.com/archives/Rectangle_Placement.shtml
+    """
+
+    def __init__(self, packing_area_width: int, packing_area_height: int):
+        self.packed_rectangles: List[Tuple[int, int, int, int]] = []
+        self.anchors: List[Tuple[int, int]] = [(0, 0)]
+        self.packing_area_width = packing_area_width
+        self.packing_area_height = packing_area_height
+        self.actual_packing_area_width = 1
+        self.actual_packing_area_height = 1
+
+    @staticmethod
+    def compare_anchor_rank(a: Tuple[int, int], b: Tuple[int, int]) -> int:
+        return a[0] + a[1] - (b[0] + b[1])
+
+    def insert_anchor(self, anchor: Tuple[int, int]):
+        """
+        Inserts a new anchor point into the anchor list.
+        This method tries to keep the anchor list ordered by ranking the anchors depending on the distance from the top
+        left corner in the packing area.
+        """
+        # Find out where to insert the new anchor based on its rank (which is calculated based on the anchor's distance
+        # to the top left corner of the packing area).
+        self.anchors.append(anchor)
+        self.anchors.sort(key=cmp_to_key(RectanglePacker.compare_anchor_rank))
+
+    @staticmethod
+    def rectangles_intersect(a_x: int, a_y: int, a_width: int, a_height: int,
+                             b_x: int, b_y: int, b_width: int, b_height: int) -> bool:
+        return b_x < a_x + a_width and a_x < b_x + b_width and b_y < a_y + a_height and a_y < b_y + b_height
+
+    def is_free(self, rectangle_x: int, rectangle_y: int, rectangle_width: int, rectangle_height: int,
+                tested_packing_area_width: int, tested_packing_area_height: int) -> bool:
+        leaves_packing_area = rectangle_x < 0 or \
+                              rectangle_y < 0 or \
+                              rectangle_x + rectangle_width > tested_packing_area_width or \
+                              rectangle_y + rectangle_height > tested_packing_area_height
+        if leaves_packing_area:
+            return False
+        # Brute-force search whether the rectangle touches any of the other rectangles already in the packing area
+        for index in range(0, len(self.packed_rectangles)):
+            other = self.packed_rectangles[index]
+            if self.rectangles_intersect(other[0], other[1], other[2], other[3], rectangle_x, rectangle_y,
+                                         rectangle_width, rectangle_height):
+                return False
+        return True
+
+    def find_first_free_anchor(self, rectangle_width: int, rectangle_height: int, tested_packing_area_width: int,
+                               tested_packing_area_height: int) -> int:
+        # Walk over all anchors (which are ordered by their distance to the upper left corner of the packing area) until
+        # one is discovered that can house the new rectangle.
+        for index in range(0, len(self.anchors)):
+            if self.is_free(self.anchors[index][0], self.anchors[index][1], rectangle_width, rectangle_height,
+                            tested_packing_area_width, tested_packing_area_height):
+                return index
+        return -1
+
+    def select_anchor_recursive(self, rectangle_width: int, rectangle_height: int,
+                                tested_packing_area_width: int, tested_packing_area_height: int) -> int:
+        """
+        Searches for a free anchor and recursively enlarges the packing area if none can be found.
+        """
+        # Try to locate an anchor point where the rectangle fits in
+        free_anchor_index = self.find_first_free_anchor(rectangle_width, rectangle_height, tested_packing_area_width,
+                                                        tested_packing_area_height)
+        # If the rectangle fits without resizing packing area (any further in case of a recursive call), take over the
+        # new packing area size and return the anchor at which the rectangle can be placed.
+        if free_anchor_index != -1:
+            self.actual_packing_area_width = tested_packing_area_width
+            self.actual_packing_area_height = tested_packing_area_height
+            return free_anchor_index
+        # If we reach this point, the rectangle did not fit in the current packing area and our only choice is to try
+        # and enlarge the packing area. For readability, determine whether the packing area can be enlarged any further
+        # in its width and in its height
+        can_enlarge_width = tested_packing_area_width < self.packing_area_width
+        can_enlarge_height = tested_packing_area_height < self.packing_area_height
+        should_enlarge_height = not can_enlarge_width or tested_packing_area_height < tested_packing_area_width
+        # Try to enlarge the smaller of the two dimensions first (unless the smaller dimension is already at its maximum
+        # size). 'shouldEnlargeHeight' is true when the height was the smaller dimension or when the width is maxed out.
+        if can_enlarge_height and should_enlarge_height:
+            # Try to double the height of the packing area
+            return self.select_anchor_recursive(rectangle_width, rectangle_height, tested_packing_area_width,
+                                                min(tested_packing_area_height * 2, self.packing_area_height))
+        if can_enlarge_width:
+            # Try to double the width of the packing area
+            return self.select_anchor_recursive(rectangle_width, rectangle_height,
+                                                min(tested_packing_area_width * 2, self.packing_area_width),
+                                                tested_packing_area_height)
+        return -1
+
+    def optimize_placement(self, placement: Tuple[int, int], rectangle_width: int, rectangle_height: int) \
+            -> Tuple[int, int]:
+        """
+        Optimizes the rectangle's placement by moving it either left or up to fill any gaps resulting from rectangles
+        blocking the anchors of the most optimal placements.
+        """
+        test_coordinate = placement[0]
+        # Try to move the rectangle to the left as far as possible
+        left_most = placement[0]
+        while self.is_free(test_coordinate, placement[1], rectangle_width, rectangle_height, self.packing_area_width,
+                           self.packing_area_height):
+            left_most = test_coordinate
+            test_coordinate -= 1
+        # Reset rectangle to original position
+        test_coordinate = placement[1]
+        # Try to move the rectangle upwards as far as possible
+        top_most = placement[1]
+        while self.is_free(placement[0], test_coordinate, rectangle_width, rectangle_height, self.packing_area_width,
+                           self.packing_area_height):
+            top_most = test_coordinate
+            test_coordinate -= 1
+        # Use the dimension in which the rectangle could be moved farther
+        if placement[0] - left_most > placement[1] - top_most:
+            return left_most, placement[1]
+        else:
+            return placement[0], top_most
+
+    def try_pack(self, rectangle_width: int, rectangle_height: int) -> Tuple[bool, Tuple[int, int]]:
+        """
+        Tries to allocate space for a rectangle in the packing area.
+        """
+        # Try to find an anchor where the rectangle fits in, enlarging the packing area and repeating the search
+        # recursively until it fits or the maximum allowed size is exceeded.
+        anchor_index = self.select_anchor_recursive(rectangle_width, rectangle_height, self.actual_packing_area_width,
+                                                    self.actual_packing_area_height)
+        # No anchor could be found at which the rectangle did fit in
+        if anchor_index == -1:
+            return False, (0, 0)
+        anchor = self.anchors[anchor_index]
+        # Move the rectangle either to the left or to the top until it collides with a neighbouring rectangle. This is
+        # done to combat the effect of lining up rectangles with gaps to the left or top of them because the anchor that
+        # would allow placement there has been blocked by another rectangle
+        placement = self.optimize_placement((anchor[0], anchor[1]), rectangle_width, rectangle_height)
+        # Remove the used anchor and add new anchors at the upper right and lower left positions of the new rectangle.
+        # The anchor is only removed if the placement optimization didn't move the rectangle so far that the anchor
+        # isn't blocked anymore
+        blocks_anchor = placement[0] + rectangle_width > anchor[0] and placement[1] + rectangle_height > anchor[1]
+        if blocks_anchor:
+            del self.anchors[anchor_index]
+        # Add new anchors at the upper right and lower left coordinates of the rectangle
+        self.insert_anchor((placement[0] + rectangle_width, placement[1]))
+        self.insert_anchor((placement[0], placement[1] + rectangle_height))
+        # Finally, we can add the rectangle to our packed rectangles list
+        self.packed_rectangles.append((placement[0], placement[1], rectangle_width, rectangle_height))
+        return True, placement
 
 
 class SparseArray:
