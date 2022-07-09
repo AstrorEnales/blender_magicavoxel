@@ -953,11 +953,6 @@ class VoxMesh:
         self.voxels = SparseArray(None)
         self.used_color_indices: Set[int] = set()
 
-    def set_voxel_color_index(self, x: int, y: int, z: int, color_index: int):
-        index = self.grid.get_index(x, y, z)
-        self.voxels[index] = color_index
-        self.used_color_indices.add(color_index)
-
     def get_voxel_color_index(self, x: int, y: int, z: int) -> int or None:
         index = self.grid.get_index(x, y, z)
         return self.voxels[index]
@@ -1644,6 +1639,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             mesh.grid.get_index(voxel_data[i], voxel_data[i + 1], voxel_data[i + 2]): voxel_data[i + 3]
             for i in range(0, num_voxels * 4, 4)
         })
+        mesh.used_color_indices.update({voxel_data[i + 3] for i in range(0, num_voxels * 4, 4)})
 
     @staticmethod
     def read_rcam_chunk(f: IO, model: VoxModel):
