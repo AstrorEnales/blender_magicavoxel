@@ -1089,22 +1089,22 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=0.1,
     )
 
+    import_material_props: BoolProperty(
+        name="Import Material Properties",
+        description="Import additional material properties such as metal and emission",
+        default=False,
+    )
+
     material_mode: EnumProperty(
         name="Material Mode",
         items=[
             ("NONE", "Ignore", "Neither colors nor materials are imported."),
-            ("VERTEX_COLOR", "Vertex Color", "Only the color palette will be imported and assigned to face " +
+            ("VERTEX_COLOR", "Vertex Color", "The color palette will be imported and assigned to face " +
              "vertex colors. A simple material is added using the vertex colors as 'Base Color'."),
-            ("VERTEX_COLOR_PROP", "Vertex Color + Prop", "The color palette and certain material properties " +
-             "are assigned as vertex color layers. A simple material is added using the vertex color layers."),
             ("MAT_PER_COLOR", "Material Per Color", "A material is added per color in the color palette and assigned " +
              "to the faces material index."),
-            ("MAT_PER_COLOR_PROP", "Material Per Color + Prop", "A material is added per color in the color palette " +
-             "and assigned to the faces material index. Additional material properties are stored for each material."),
             ("MAT_AS_TEX", "Materials As Texture", "The color palette is created as a 256x1 texture. A simple " +
              "material is added using this texture."),
-            ("MAT_AS_TEX_PROP", "Materials As Texture + Prop", "The color palette and certain material properties " +
-             "are created as 256x1 textures. A simple material is added using these textures."),
         ],
         description="",
         default="VERTEX_COLOR"
@@ -1151,7 +1151,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         links = vertex_color_mat.node_tree.links
         bdsf_node = nodes["Principled BSDF"]
         vertex_color_node = self.create_vertex_color_node(nodes, "Col")
-        if self.material_mode == "VERTEX_COLOR_PROP":
+        if self.import_material_props:
             vertex_color_material_node = self.create_vertex_color_node(nodes, "Mat")
             separate_rgb_node = nodes.new("ShaderNodeSeparateRGB")
             links.new(vertex_color_material_node.outputs["Color"], separate_rgb_node.inputs["Image"])
@@ -1177,7 +1177,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 mat_output_node = nodes["Material Output"]
                 color = model.get_color(color_index)
                 bdsf_node.inputs["Base Color"].default_value = color
-                if self.material_mode == "MAT_PER_COLOR_PROP":
+                if self.import_material_props:
                     bdsf_node.inputs["Roughness"].default_value = material.roughness
                     bdsf_node.inputs["Metallic"].default_value = material.metallic
                     bdsf_node.inputs["IOR"].default_value = material.ior
@@ -1224,7 +1224,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         color_texture_node = nodes.new("ShaderNodeTexImage")
         color_texture_node.image = color_texture
         links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Base Color"])
-        if self.material_mode == "MAT_AS_TEX_PROP":
+        if self.import_material_props:
             links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Emission"])
             bdsf_node.inputs["Emission Strength"].default_value = 0
             mat_texture = bpy.data.images.new(collection_name + " Material Texture", width=256, height=1)
@@ -1255,6 +1255,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "voxel_hull",
                 "meshing_type",
                 "merge_models",
+                "import_material_props",
             ),
         )
         total_timer_start = time.time()
@@ -1320,11 +1321,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             # Create materials depending on the selected material mode
             materials = []
             color_index_material_map = result.get_used_color_indices_material_map()
-            if self.material_mode == "VERTEX_COLOR" or self.material_mode == "VERTEX_COLOR_PROP":
+            if self.material_mode == "VERTEX_COLOR":
                 materials = self.create_materials_vertex_colors(collection_name, result)
-            elif self.material_mode == "MAT_PER_COLOR" or self.material_mode == "MAT_PER_COLOR_PROP":
+            elif self.material_mode == "MAT_PER_COLOR":
                 materials = self.create_materials_per_color(collection_name, result, color_index_material_map)
-            elif self.material_mode == "MAT_AS_TEX" or self.material_mode == "MAT_AS_TEX_PROP":
+            elif self.material_mode == "MAT_AS_TEX":
                 materials = self.create_materials_as_textures(collection_name, result)
             # Create models
             model_id_object_lookup = {}
@@ -1364,15 +1365,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
                                     new_mesh.from_pydata(vertices, [], faces)
                                     new_mesh.update()
-                                    if self.material_mode == "VERTEX_COLOR" or \
-                                            self.material_mode == "VERTEX_COLOR_PROP":
+                                    if self.material_mode == "VERTEX_COLOR":
                                         new_mesh.materials.append(materials[0])
                                         new_mesh.vertex_colors.new()
                                         vertex_colors = new_mesh.vertex_colors[0].data
                                         color = result.get_color(color_index)
                                         for i in range(len(faces) * 4):
                                             vertex_colors[i].color = color
-                                        if self.material_mode == "VERTEX_COLOR_PROP":
+                                        if self.import_material_props:
                                             new_mesh.vertex_colors.new()
                                             new_mesh.vertex_colors[1].name = "Mat"
                                             vertex_colors_mat = new_mesh.vertex_colors[1].data
@@ -1380,15 +1380,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                             mat_color = (material.roughness, material.metallic, material.ior, 0.0)
                                             for i in range(len(faces) * 4):
                                                 vertex_colors_mat[i].color = mat_color
-                                    elif self.material_mode == "MAT_AS_TEX" or self.material_mode == "MAT_AS_TEX_PROP":
+                                    elif self.material_mode == "MAT_AS_TEX":
                                         new_mesh.materials.append(materials[0])
                                         uv_layer = new_mesh.uv_layers.new(name="UVMap")
                                         # Color index as pixel x position + 0.5 offset for the center of the pixel
                                         uv_x = (color_index + 0.5) / 256.0
                                         for i in range(len(faces) * 4):
                                             uv_layer.data[i].uv = [uv_x, 0.5]
-                                    elif self.material_mode == "MAT_PER_COLOR" or \
-                                            self.material_mode == "MAT_PER_COLOR_PROP":
+                                    elif self.material_mode == "MAT_PER_COLOR":
                                         material_index = color_index_material_map[color_index]
                                         new_mesh.materials.append(materials[material_index])
                                         for i, face in enumerate(new_mesh.polygons):
@@ -1441,11 +1440,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     # Assign the material(s) to the object
                     for material in materials:
                         new_mesh.materials.append(material)
-                    if self.material_mode == "VERTEX_COLOR" or self.material_mode == "VERTEX_COLOR_PROP":
+                    if self.material_mode == "VERTEX_COLOR":
                         new_mesh.vertex_colors.new()
                         vertex_colors = new_mesh.vertex_colors[0].data
                         vertex_colors_mat = None
-                        if self.material_mode == "VERTEX_COLOR_PROP":
+                        if self.import_material_props:
                             new_mesh.vertex_colors.new()
                             new_mesh.vertex_colors[1].name = "Mat"
                             vertex_colors_mat = new_mesh.vertex_colors[1].data
@@ -1463,7 +1462,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                 vertex_colors_mat[vertex_offset + 1].color = mat_color
                                 vertex_colors_mat[vertex_offset + 2].color = mat_color
                                 vertex_colors_mat[vertex_offset + 3].color = mat_color
-                    elif self.material_mode == "MAT_AS_TEX" or self.material_mode == "MAT_AS_TEX_PROP":
+                    elif self.material_mode == "MAT_AS_TEX":
                         uv_layer = new_mesh.uv_layers.new(name="UVMap")
                         for i in range(len(quads)):
                             vertex_offset = i * 4
@@ -1474,6 +1473,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             uv_layer.data[vertex_offset + 2].uv = [uv_x, 0.5]
                             uv_layer.data[vertex_offset + 3].uv = [uv_x, 0.5]
                     elif self.material_mode == "MAT_PER_COLOR" or self.material_mode == "MAT_PER_COLOR_PROP":
+                    elif self.material_mode == "MAT_PER_COLOR":
                         for i, face in enumerate(new_mesh.polygons):
                             face.material_index = color_index_material_map[quads[i].color]
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
@@ -1852,6 +1852,8 @@ class VOX_PT_import_materials(bpy.types.Panel):
         operator = sfile.active_operator
 
         layout.row().prop(operator, "material_mode")
+        if operator.material_mode != "NONE":
+            layout.row().prop(operator, "import_material_props")
 
 
 class VOX_PT_import_cameras(bpy.types.Panel):
