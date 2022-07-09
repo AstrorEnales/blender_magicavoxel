@@ -898,7 +898,8 @@ class VoxMaterial:
             self.type = data["_type"]
         # _rough --> Roughness [0-1] float, default: 0.1 | 0.1 --> UI 10
         # Multiply by 0.5 as the max roughness of MV roughly matches a value of 0.5
-        self.roughness = (float(data["_rough"]) if "_rough" in data else 0.1) * 0.5
+        self.roughness = 1.0 if self.type == VoxMaterial.TYPE_DIFFUSE else \
+            (float(data["_rough"]) if "_rough" in data else 0.1) * 0.5
         has_metal = self.type in [VoxMaterial.TYPE_METAL, VoxMaterial.TYPE_BLEND]
         # _metal --> Metallic [0-1] float, default: 0.0
         self.metallic = float(data["_metal"]) if "_metal" in data and has_metal else 0
