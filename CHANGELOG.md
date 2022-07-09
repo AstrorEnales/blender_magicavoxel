@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.2.4](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.4)
+
+  * **[change]** Material modes with additional material properties moved to checkbox
+  * **[fix]** Fix small greedy meshing issue
+  * **[fix]** Fix material per color mode
+  * **[feature]** New material mode "Textured Models (UV unwrap)"
+
 ## [v1.2.3](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.3)
 
   * **[feature]** Performance improvements
