@@ -48,6 +48,7 @@ from bpy.props import (
     BoolProperty,
     FloatProperty,
     EnumProperty,
+    IntProperty,
 )
 from bpy_extras.io_utils import (
     ImportHelper,
@@ -1089,6 +1090,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=0.1,
     )
 
+    max_texture_size: IntProperty(
+        name="Max Texture Size (px)",
+        description="Maximum size (width and height) of generated textures",
+        min=256,
+        soft_min=256,
+        max=8192,
+        soft_max=8192,
+        default=4096,
+    )
+
     import_material_props: BoolProperty(
         name="Import Material Properties",
         description="Import additional material properties such as metal and emission",
@@ -1105,6 +1116,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
              "to the faces material index."),
             ("MAT_AS_TEX", "Materials As Texture", "The color palette is created as a 256x1 texture. A simple " +
              "material is added using this texture."),
+            ("TEXTURED_MODEL", "Textured Models (UV unwrap)", "Each model is assigned a material and texture with " +
+             "UV unwrap."),
         ],
         description="",
         default="VERTEX_COLOR"
@@ -1255,6 +1268,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "voxel_hull",
                 "meshing_type",
                 "merge_models",
+                "max_texture_size",
                 "import_material_props",
             ),
         )
@@ -1402,7 +1416,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 else:
                     if self.meshing_type == "GREEDY":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
-                        ignore_color = self.material_mode == "NONE"
+                        ignore_color = self.material_mode in ["NONE", "TEXTURED_MODEL"]
                         quads = GreedyMeshing.generate_mesh(mesh.grid, mesh.voxels, outside, ignore_color)
                     elif self.meshing_type == "SIMPLE_QUADS":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
@@ -1472,7 +1486,150 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             uv_layer.data[vertex_offset + 1].uv = [uv_x, 0.5]
                             uv_layer.data[vertex_offset + 2].uv = [uv_x, 0.5]
                             uv_layer.data[vertex_offset + 3].uv = [uv_x, 0.5]
-                    elif self.material_mode == "MAT_PER_COLOR" or self.material_mode == "MAT_PER_COLOR_PROP":
+                    elif self.material_mode == "TEXTURED_MODEL":
+                        packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
+                        quad_placements: List[Tuple[int, int, int, int]] = []
+                        for i in range(len(quads)):
+                            quad = quads[i]
+                            if quad.normal[0] != 0:
+                                width = max(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1]) - \
+                                        min(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
+                                height = max(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2]) - \
+                                         min(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
+                            elif quad.normal[1] != 0:
+                                width = max(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0]) - \
+                                        min(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
+                                height = max(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2]) - \
+                                         min(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
+                            else:
+                                width = max(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0]) - \
+                                        min(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
+                                height = max(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1]) - \
+                                         min(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
+                            quad_pack_successful, quad_placement = packer.try_pack(width, height)
+                            if not quad_pack_successful:
+                                self.report({"WARNING"}, "File is not in VOX format")
+                                return {"CANCELLED"}
+                            quad_placements.append((quad_placement[0], quad_placement[1], width, height))
+                        pixel_size = packer.actual_packing_area_width * packer.actual_packing_area_height
+                        pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
+                        metal_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
+                        roughness_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
+                        emission_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
+                        uv_x_step = 1.0 / packer.actual_packing_area_width
+                        uv_y_step = 1.0 / packer.actual_packing_area_height
+                        uv_layer = new_mesh.uv_layers.new(name="UVMap")
+                        for i in range(len(quads)):
+                            quad = quads[i]
+                            quad_placement = quad_placements[i]
+                            vertex_offset = i * 4
+                            uv_x = quad_placement[0] * uv_x_step
+                            uv_y = quad_placement[1] * uv_y_step
+                            uv_right = (quad_placement[0] + quad_placement[2]) * uv_x_step
+                            uv_top = (quad_placement[1] + quad_placement[3]) * uv_y_step
+                            uv_layer.data[vertex_offset].uv = [uv_x, uv_y]
+                            uv_layer.data[vertex_offset + 3].uv = [uv_x, uv_top]
+                            uv_layer.data[vertex_offset + 2].uv = [uv_right, uv_top]
+                            uv_layer.data[vertex_offset + 1].uv = [uv_right, uv_y]
+                            if quad.normal[0] != 0:
+                                tx = quad.p1[0] if quad.normal[0] < 0 else quad.p1[0] - 1
+                                width = max(quad.p1[1], quad.p4[1]) - min(quad.p1[1], quad.p4[1])
+                                height = quad.p2[2] - quad.p1[2]
+                                for iz in range(0, height):
+                                    pixel_offset_iz = (quad_placement[1] + iz) * packer.actual_packing_area_width
+                                    tz = quad.p1[2] + iz
+                                    for iy in range(0, width):
+                                        ty = quad.p1[1] - 1 - iy if quad.normal[0] < 0 else quad.p1[1] + iy
+                                        pixel_index = (pixel_offset_iz + quad_placement[0] + iy) * 4
+                                        color_index = mesh.get_voxel_color_index(tx, ty, tz)
+                                        color = result.get_color(color_index)
+                                        pixels[pixel_index:pixel_index + 4] = color
+                                        color_material = result.materials[color_index]
+                                        metal_mask_pixels[pixel_index:pixel_index + 3] = [color_material.metallic] * 3
+                                        emission_mask_pixels[pixel_index:pixel_index + 3] = [
+                                                                                                color_material.emission] * 3
+                                        roughness_mask_pixels[pixel_index:pixel_index + 3] = [
+                                                                                                 color_material.roughness] * 3
+                            elif quad.normal[1] != 0:
+                                ty = quad.p1[1] if quad.normal[1] < 0 else quad.p1[1] - 1
+                                width = max(quad.p1[0], quad.p4[0]) - min(quad.p1[0], quad.p4[0])
+                                height = quad.p2[2] - quad.p1[2]
+                                for iz in range(0, height):
+                                    pixel_offset_iz = (quad_placement[1] + iz) * packer.actual_packing_area_width
+                                    tz = quad.p1[2] + iz
+                                    for ix in range(0, width):
+                                        tx = quad.p1[0] + ix if quad.normal[1] < 0 else quad.p1[0] - 1 - ix
+                                        pixel_index = (pixel_offset_iz + quad_placement[0] + ix) * 4
+                                        color_index = mesh.get_voxel_color_index(tx, ty, tz)
+                                        color = result.get_color(color_index)
+                                        pixels[pixel_index:pixel_index + 4] = color
+                                        color_material = result.materials[color_index]
+                                        metal_mask_pixels[pixel_index:pixel_index + 3] = [color_material.metallic] * 3
+                                        emission_mask_pixels[pixel_index:pixel_index + 3] = [
+                                                                                                color_material.emission] * 3
+                                        roughness_mask_pixels[pixel_index:pixel_index + 3] = [
+                                                                                                 color_material.roughness] * 3
+                            elif quad.normal[2] != 0:
+                                tz = quad.p1[2] if quad.normal[2] < 0 else quad.p1[2] - 1
+                                width = quad.p4[0] - quad.p1[0]
+                                height = max(quad.p1[1], quad.p2[1]) - min(quad.p1[1], quad.p2[1])
+                                for ix in range(0, width):
+                                    tx = quad.p1[0] + ix
+                                    for iy in range(0, height):
+                                        ty = quad.p1[1] - 1 - iy if quad.normal[2] < 0 else quad.p1[1] + iy
+                                        pixel_offset_iy = (quad_placement[1] + iy) * packer.actual_packing_area_width
+                                        pixel_index = (pixel_offset_iy + quad_placement[0] + ix) * 4
+                                        color_index = mesh.get_voxel_color_index(tx, ty, tz)
+                                        color = result.get_color(color_index)
+                                        pixels[pixel_index:pixel_index + 4] = color
+                                        color_material = result.materials[color_index]
+                                        metal_mask_pixels[pixel_index:pixel_index + 3] = [color_material.metallic] * 3
+                                        emission_mask_pixels[pixel_index:pixel_index + 3] = [
+                                                                                                color_material.emission] * 3
+                                        roughness_mask_pixels[pixel_index:pixel_index + 3] = [
+                                                                                                 color_material.roughness] * 3
+                        # Setup model material
+                        color_texture = bpy.data.images.new(collection_name + " Color Texture",
+                                                            width=packer.actual_packing_area_width,
+                                                            height=packer.actual_packing_area_height)
+                        color_texture.pixels = pixels
+                        mat = bpy.data.materials.new(name="mesh_%s Material" % mesh_index)
+                        mat.use_nodes = True
+                        nodes = mat.node_tree.nodes
+                        links = mat.node_tree.links
+                        bdsf_node = nodes["Principled BSDF"]
+                        color_texture_node = nodes.new("ShaderNodeTexImage")
+                        color_texture_node.image = color_texture
+                        color_texture_node.interpolation = "Closest"
+                        links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Base Color"])
+                        if self.import_material_props:
+                            metal_mask_texture = bpy.data.images.new(collection_name + " Metal Mask Texture",
+                                                                     width=packer.actual_packing_area_width,
+                                                                     height=packer.actual_packing_area_height)
+                            metal_mask_texture.pixels = metal_mask_pixels
+                            metal_mask_texture_node = nodes.new("ShaderNodeTexImage")
+                            metal_mask_texture_node.image = metal_mask_texture
+                            metal_mask_texture_node.interpolation = "Closest"
+                            links.new(metal_mask_texture_node.outputs["Color"], bdsf_node.inputs["Metallic"])
+                            roughness_mask_texture = bpy.data.images.new(collection_name + " Roughness Mask Texture",
+                                                                         width=packer.actual_packing_area_width,
+                                                                         height=packer.actual_packing_area_height)
+                            roughness_mask_texture.pixels = roughness_mask_pixels
+                            roughness_mask_texture_node = nodes.new("ShaderNodeTexImage")
+                            roughness_mask_texture_node.image = roughness_mask_texture
+                            roughness_mask_texture_node.interpolation = "Closest"
+                            links.new(roughness_mask_texture_node.outputs["Color"], bdsf_node.inputs["Roughness"])
+                            emission_mask_texture = bpy.data.images.new(collection_name + " Emission Mask Texture",
+                                                                        width=packer.actual_packing_area_width,
+                                                                        height=packer.actual_packing_area_height)
+                            emission_mask_texture.pixels = emission_mask_pixels
+                            emission_mask_texture_node = nodes.new("ShaderNodeTexImage")
+                            emission_mask_texture_node.image = emission_mask_texture
+                            emission_mask_texture_node.interpolation = "Closest"
+                            links.new(emission_mask_texture_node.outputs["Color"],
+                                      bdsf_node.inputs["Emission Strength"])
+                            links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Emission"])
+                        new_mesh.materials.append(mat)
                     elif self.material_mode == "MAT_PER_COLOR":
                         for i, face in enumerate(new_mesh.polygons):
                             face.material_index = color_index_material_map[quads[i].color]
@@ -1854,6 +2011,8 @@ class VOX_PT_import_materials(bpy.types.Panel):
         layout.row().prop(operator, "material_mode")
         if operator.material_mode != "NONE":
             layout.row().prop(operator, "import_material_props")
+        if operator.material_mode == "TEXTURED_MODEL":
+            layout.row().prop(operator, "max_texture_size")
 
 
 class VOX_PT_import_cameras(bpy.types.Panel):
