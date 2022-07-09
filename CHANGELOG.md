@@ -6,6 +6,8 @@
   * **[fix]** Fix small greedy meshing issue
   * **[fix]** Fix material per color mode
   * **[feature]** New material mode "Textured Models (UV unwrap)"
+  * **[feature]** Use scene graph name properties for group and model names
+  * **[feature]** Basic camera import
 
 ## [v1.2.3](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.2.3)
 
