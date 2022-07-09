@@ -1117,7 +1117,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             ("MAT_AS_TEX", "Materials As Texture", "The color palette is created as a 256x1 texture. A simple " +
              "material is added using this texture."),
             ("TEXTURED_MODEL", "Textured Models (UV unwrap)", "Each model is assigned a material and texture with " +
-             "UV unwrap."),
+             "UV unwrap. Automatically locks Greedy meshing mode."),
         ],
         description="",
         default="VERTEX_COLOR"
@@ -1272,6 +1272,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "import_material_props",
             ),
         )
+
+        if self.material_mode == "TEXTURED_MODEL" and self.meshing_type not in ["GREEDY"]:
+            self.report({"WARNING"}, "Selected 'Textured Models (UV unwrap)' material mode without greedy meshing.")
+            self.meshing_type = "SIMPLE_QUADS"
+
         total_timer_start = time.time()
         filepath = keywords['filepath']
         if DEBUG_OUTPUT:
@@ -2012,6 +2017,9 @@ class VOX_PT_import_materials(bpy.types.Panel):
         if operator.material_mode != "NONE":
             layout.row().prop(operator, "import_material_props")
         if operator.material_mode == "TEXTURED_MODEL":
+            operator.meshing_type = "GREEDY"
+            layout.row().label(text="INFO: Locked Greedy meshing for")
+            layout.row().label(text="textured models mode.")
             layout.row().prop(operator, "max_texture_size")
 
 
