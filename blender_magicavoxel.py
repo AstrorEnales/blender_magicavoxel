@@ -938,6 +938,10 @@ class VoxMaterial:
         # _g --> Phase [-0.9-0.9] float, default: 0.0
         self.phase = float(data["_g"]) if "_g" in data and has_media else 0
 
+    @staticmethod
+    def get_default():
+        return VoxMaterial({"_rough": "0.1", "_ior": "0.3", "_ri": "1.3", "_d": "0.05"})
+
     def __str__(self):
         return ("VoxMaterial {type: %s, roughness: %s, metallic: %s, specular: %s, ior: %s, emission: %s, " +
                 "flux: %s, ldr: %s, transmission: %s, media_type: %s, density: %s, phase: %s}") % (
@@ -1019,7 +1023,7 @@ class VoxModel:
         self.version = version
         self.next_model_id: int = 0
         self.color_palette = [x for x in DEFAULT_PALETTE]
-        self.materials: Dict[int, VoxMaterial] = {}
+        self.materials: Dict[int, VoxMaterial] = {i: VoxMaterial.get_default() for i in range(0, 256)}
         self.layers: Dict[int, Dict[str, str]] = {}
         self.cameras: Dict[int, Dict[str, str]] = {}
         self.rendering_attributes: List[Dict[str, str]] = []
