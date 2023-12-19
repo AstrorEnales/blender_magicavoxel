@@ -40,6 +40,18 @@ This table only lists versions of Blender with bundled Python 3+
 
 | Blender Version | Python Version |     Status     |
 |----------------:|---------------:|:--------------:|
+|           4.0.2 |        3.10.13 |       ✅        |
+|           4.0.1 |        3.10.13 | not tested yet |
+|           4.0.0 |        3.10.13 | not tested yet |
+|           3.6.7 |        3.10.13 | not tested yet |
+|           3.6.5 |        3.10.13 | not tested yet |
+|           3.6.4 |        3.10.12 | not tested yet |
+|           3.6.3 |        3.10.12 | not tested yet |
+|           3.6.2 |        3.10.12 | not tested yet |
+|           3.6.1 |        3.10.12 | not tested yet |
+|           3.6.0 |        3.10.12 | not tested yet |
+|           3.5.1 |         3.10.9 | not tested yet |
+|           3.5.0 |         3.10.9 | not tested yet |
 |           3.4.1 |         3.10.8 |       ✅        |
 |           3.4.0 |         3.10.8 | not tested yet |
 |           3.3.3 |         3.10.8 | not tested yet |
