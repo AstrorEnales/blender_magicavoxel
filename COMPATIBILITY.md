@@ -4,6 +4,7 @@
 
 | MagicaVoxel Version |     Status     |
 |--------------------:|:--------------:|
+|     0.99.7.1 (Beta) |       ✅        |
 |     0.99.7.0 (Beta) |       ✅        |
 |            0.99.6.4 | not tested yet |
 |            0.99.6.2 | not tested yet |
