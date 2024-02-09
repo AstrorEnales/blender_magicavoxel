@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.4.2](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.2)
+
+  * **[fix]** Fix BDSF input keys for Blender 4
+
 ## [v1.4.1](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.1)
 
   * **[change]** #7 Populate model material slots with defaults before loading
