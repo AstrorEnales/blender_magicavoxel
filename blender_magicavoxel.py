@@ -280,142 +280,700 @@ class RectanglePacker:
         return True, placement
 
 
-class SparseArray:
-    def __init__(self, default_value, default_map: Dict or None = None):
+ChildXnYnZn = 0
+ChildXpYnZn = 1
+ChildXnYpZn = 2
+ChildXpYpZn = 3
+ChildXnYnZp = 4
+ChildXpYnZp = 5
+ChildXnYpZp = 6
+ChildXpYpZp = 7
+SideLength = 4
+LeafIndexXMap = [
+    0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2,
+    3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3
+]
+LeafIndexYMap = [
+    0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0, 0, 0, 1, 1, 1,
+    1, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+]
+LeafIndexZMap = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
+]
+SideLengthTwice = SideLength * SideLength
+GridLength = SideLength * SideLength * SideLength
+
+
+class Octree:
+    def __init__(self, size: int = 8, default_value: any = None):
+        self.size = 2 ** (max(8, size) - 1).bit_length()
+        self.size_half = self.size >> 1
         self.default_value = default_value
-        self.map = default_map if default_map is not None else {}
+        self._root = OctreeBranchNode(self, -self.size_half, -self.size_half, -self.size_half, self.size,
+                                      self.default_value)
+        self.leafs: List[OctreeLeafNode] = []
 
-    def __delitem__(self, key):
-        if key in self.map:
-            del self.map[key]
+    @property
+    def is_full(self) -> bool:
+        return self._root.is_full
 
-    def __getitem__(self, item):
-        return self.map[item] if item in self.map else self.default_value
+    @property
+    def is_empty(self) -> bool:
+        return self._root.is_empty
 
-    def __setitem__(self, key, value):
-        if value == self.default_value:
-            del self.map[key]
+    @property
+    def is_not_empty(self) -> bool:
+        return self._root.is_not_empty
+
+    @property
+    def count(self) -> int:
+        return self._root.count
+
+    @property
+    def not_empty_bounds(self) -> Tuple[int, int, int, int, int, int]:
+        return (0, 0, 0, 1, 1, 1) if self._root.is_empty else \
+            (self._root.min_x, self._root.min_y, self._root.min_z, self._root.max_x, self._root.max_y, self._root.max_z)
+
+    def get_value(self, x: int, y: int, z: int) -> any:
+        return self.default_value if self.is_outside(x, y, z) else self._root.get_value(x, y, z)
+
+    def contains(self, x: int, y: int, z: int) -> bool:
+        return self.is_inside(x, y, z) and self._root.contains(x, y, z)
+
+    def is_outside(self, x: int, y: int, z: int) -> bool:
+        return (x >= self.size_half or x < -self.size_half or y >= self.size_half or y < -self.size_half or
+                z >= self.size_half or z < -self.size_half)
+
+    def is_inside(self, x: int, y: int, z: int) -> bool:
+        # noinspection PyChainedComparisons
+        return (x < self.size_half and x >= -self.size_half and y < self.size_half and y >= -self.size_half and
+                z < self.size_half and z >= -self.size_half)
+
+    def add(self, x: int, y: int, z: int, value: any):
+        while self.is_outside(x, y, z):
+            self._expand()
+        self._root.add(x, y, z, value)
+
+    def _expand(self):
+        self.size_half <<= 1
+        self.size <<= 1
+        total_count = 0
+        new_root = OctreeBranchNode(self, -self.size_half, -self.size_half, -self.size_half, self.size,
+                                    self.default_value)
+        # Y+
+        child = self._root.child_nodes[ChildXpYpZp]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x, child.start_position_y, child.start_position_z,
+                                         child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXnYnZn] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXpYpZp] = new_child
+
+        child = self._root.child_nodes[ChildXpYpZn]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x, child.start_position_y,
+                                         child.start_position_z - child.size, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXnYnZp] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXpYpZn] = new_child
+
+        child = self._root.child_nodes[ChildXnYpZp]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x - child.size, child.start_position_y,
+                                         child.start_position_z, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXpYnZn] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXnYpZp] = new_child
+
+        child = self._root.child_nodes[ChildXnYpZn]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x - child.size, child.start_position_y,
+                                         child.start_position_z - child.size, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXpYnZp] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXnYpZn] = new_child
+
+        # Y-
+        child = self._root.child_nodes[ChildXpYnZp]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x, child.start_position_y - child.size,
+                                         child.start_position_z, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXnYpZn] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXpYnZp] = new_child
+
+        child = self._root.child_nodes[ChildXpYnZn]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x, child.start_position_y - child.size,
+                                         child.start_position_z - child.size, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXnYpZp] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXpYnZn] = new_child
+
+        child = self._root.child_nodes[ChildXnYnZp]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x - child.size, child.start_position_y - child.size,
+                                         child.start_position_z, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXpYpZn] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXnYnZp] = new_child
+
+        child = self._root.child_nodes[ChildXnYnZn]
+        if child is not None:
+            new_child = OctreeBranchNode(self, child.start_position_x - child.size, child.start_position_y - child.size,
+                                         child.start_position_z - child.size, child.size * 2, self.default_value)
+            new_child.child_nodes[ChildXpYpZp] = child
+            new_child._count = child.count
+            total_count += child.count
+            new_child.BoundsSet = child.bounds_set
+            new_child._min_x = child.min_x
+            new_child._min_y = child.min_y
+            new_child._min_z = child.min_z
+            new_child._max_x = child.max_x
+            new_child._max_y = child.max_y
+            new_child._max_z = child.max_z
+            new_root.child_nodes[ChildXnYnZn] = new_child
+
+        new_root._count = total_count
+        new_root.update_not_empty_bounds()
+        self._root = new_root
+
+    def _contract(self):
+        while (self.size > 8 and
+               self._root.is_child_contractible(ChildXnYnZn, ChildXpYpZp) and
+               self._root.is_child_contractible(ChildXpYpZn, ChildXnYnZp) and
+               self._root.is_child_contractible(ChildXnYpZp, ChildXpYnZn) and
+               self._root.is_child_contractible(ChildXpYpZp, ChildXnYnZn)):
+            self.size >>= 1
+            self.size_half >>= 1
+            new_root = OctreeBranchNode(self, -self.size_half, -self.size_half, -self.size_half, self.size,
+                                        self.default_value)
+            if self._root.child_nodes[ChildXpYpZp] is not None:
+                # noinspection PyUnresolvedReferences
+                new_root.child_nodes[ChildXpYpZp] = self._root.child_nodes[ChildXpYpZp].child_nodes[ChildXnYnZn]
+            if self._root.child_nodes[ChildXpYpZn] is not None:
+                # noinspection PyUnresolvedReferences
+                new_root.child_nodes[ChildXpYpZn] = self._root.child_nodes[ChildXpYpZn].child_nodes[ChildXnYnZp]
+            if self._root.child_nodes[ChildXnYpZp] is not None:
+                # noinspection PyUnresolvedReferences
+                new_root.child_nodes[ChildXnYpZp] = self._root.child_nodes[ChildXnYpZp].child_nodes[ChildXpYnZn]
+            if self._root.child_nodes[ChildXnYnZn] is not None:
+                # noinspection PyUnresolvedReferences
+                new_root.child_nodes[ChildXnYnZn] = self._root.child_nodes[ChildXnYnZn].child_nodes[ChildXpYpZp]
+            new_root.update_not_empty_bounds()
+            self._root = new_root
+
+    def remove(self, x: int, y: int, z: int):
+        if self.is_inside(x, y, z):
+            self._root.remove(x, y, z)
+            self._contract()
+
+
+class OctreeNode:
+    def __init__(self, parent: Octree, start_position_x: int, start_position_y: int, start_position_z: int, size: int,
+                 default_value: any):
+        self.parent = parent
+        self.start_position_x = start_position_x
+        self.start_position_y = start_position_y
+        self.start_position_z = start_position_z
+        self.size = size
+        self.size_half = size >> 1
+        self.default_value = default_value
+
+        self.bounds_set = False
+        self.max_x = -1
+        self.max_y = -1
+        self.max_z = -1
+        self.min_x = -1
+        self.min_y = -1
+        self.min_z = -1
+
+    @property
+    def is_leaf(self) -> bool:
+        return False
+
+    @property
+    def is_full(self) -> bool:
+        return False
+
+    @property
+    def count(self) -> int:
+        return -1
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.bounds_set
+
+    @property
+    def is_not_empty(self) -> bool:
+        return self.bounds_set
+
+    def get_value(self, x: int, y: int, z: int) -> any:
+        pass
+
+    def contains(self, x: int, y: int, z: int) -> bool:
+        pass
+
+    def add(self, x: int, y: int, z: int, value: any) -> bool:
+        pass
+
+    def remove(self, x: int, y: int, z: int) -> bool:
+        pass
+
+
+class OctreeBranchNode(OctreeNode):
+    def __init__(self, parent: Octree, start_position_x: int, start_position_y: int, start_position_z: int, size: int,
+                 default_value: any):
+        OctreeNode.__init__(self, parent, start_position_x, start_position_y, start_position_z, size, default_value)
+        self._max_count = ((SideLength * 2) ** (math.log2(size) - 2)) * GridLength
+        self._center_x = start_position_x + self.size_half
+        self._center_y = start_position_y + self.size_half
+        self._center_z = start_position_z + self.size_half
+        self._count = 0
+        self.child_nodes: List[OctreeNode | None] = [None] * 8
+
+    @property
+    def is_leaf(self) -> bool:
+        return False
+
+    @property
+    def is_full(self) -> bool:
+        return self._count == self._max_count
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    def _get_index(self, x: int, y: int, z: int) -> int:
+        y_lower = y < self._center_y
+        z_lower = z < self._center_z
+        if x < self._center_x:
+            if y_lower:
+                return ChildXnYnZn if z_lower else ChildXnYnZp
+            return ChildXnYpZn if z_lower else ChildXnYpZp
+        if y_lower:
+            return ChildXpYnZn if z_lower else ChildXpYnZp
+        return ChildXpYpZn if z_lower else ChildXpYpZp
+
+    def get_value(self, x: int, y: int, z: int) -> any:
+        child = self.child_nodes[self._get_index(x, y, z)]
+        return child.get_value(x, y, z) if child is not None else self.default_value
+
+    def contains(self, x: int, y: int, z: int) -> bool:
+        child = self.child_nodes[self._get_index(x, y, z)]
+        return child is not None and child.contains(x, y, z)
+
+    def add(self, x: int, y: int, z: int, value: any) -> bool:
+        node_index = self._get_index(x, y, z)
+        node = self.child_nodes[node_index]
+        if node is None:
+            pos_x = self.start_position_x if x < self._center_x else self._center_x
+            pos_y = self.start_position_y if y < self._center_y else self._center_y
+            pos_z = self.start_position_z if z < self._center_z else self._center_z
+            node = (
+                OctreeBranchNode(self.parent, pos_x, pos_y, pos_z, self.size >> 1, self.default_value)
+                if self.size > SideLength else
+                OctreeLeafNode(self.parent, pos_x, pos_y, pos_z, self.default_value)
+            )
+            self.child_nodes[node_index] = node
+
+        if not node.add(x, y, z, value):
+            return False
+        self._count += 1
+        if not self.bounds_set:
+            self.min_x = x
+            self.min_y = y
+            self.min_z = z
+            self.max_x = x + 1
+            self.max_y = y + 1
+            self.max_z = z + 1
         else:
-            self.map[key] = value
+            if x < self.min_x:
+                self.min_x = x
+            if y < self.min_y:
+                self.min_y = y
+            if z < self.min_z:
+                self.min_z = z
+            if x >= self.max_x:
+                self.max_x = x + 1
+            if y >= self.max_y:
+                self.max_y = y + 1
+            if z >= self.max_z:
+                self.max_z = z + 1
+
+        self.bounds_set = True
+        return True
+
+    def remove(self, x: int, y: int, z: int) -> bool:
+        node_index = self._get_index(x, y, z)
+        node = self.child_nodes[node_index]
+        success = False
+        if node is not None:
+            success = node.remove(x, y, z)
+            if node.is_empty:
+                if node.is_leaf:
+                    # noinspection PyTypeChecker
+                    self.parent.leafs.remove(node)
+                self.child_nodes[node_index] = None
+        if success:
+            self._count -= 1
+            self.update_not_empty_bounds()
+        return success
+
+    def update_not_empty_bounds(self):
+        if self._count == self._max_count:
+            self.min_x = self.start_position_x
+            self.min_y = self.start_position_y
+            self.min_z = self.start_position_z
+            self.max_x = self.start_position_x + self.size - 1
+            self.max_y = self.start_position_y + self.size - 1
+            self.max_z = self.start_position_z + self.size - 1
+            self.bounds_set = True
+        else:
+            self.min_x = -1
+            self.max_x = -1
+            self.min_y = -1
+            self.max_y = -1
+            self.min_z = -1
+            self.max_z = -1
+            self.bounds_set = False
+            for i in range(0, len(self.child_nodes)):
+                child = self.child_nodes[i]
+                if child is None or child.is_empty:
+                    continue
+                if not self.bounds_set:
+                    self.min_x = child.min_x
+                    self.min_y = child.min_y
+                    self.min_z = child.min_z
+                    self.max_x = child.max_x
+                    self.max_y = child.max_y
+                    self.max_z = child.max_z
+                else:
+                    if child.min_x < self.min_x:
+                        self.min_x = child.min_x
+                    if child.min_y < self.min_y:
+                        self.min_y = child.min_y
+                    if child.min_z < self.min_z:
+                        self.min_z = child.min_z
+                    if child.max_x > self.max_x:
+                        self.max_x = child.max_x
+                    if child.max_y > self.max_y:
+                        self.max_y = child.max_y
+                    if child.max_z > self.max_z:
+                        self.max_z = child.max_z
+                self.bounds_set = True
+
+    def is_child_contractible(self, child_index: int, remaining_child_child_index: int) -> bool:
+        child = self.child_nodes[child_index]
+        if child is not None:
+            if isinstance(child, OctreeBranchNode):
+                for i in range(0, len(child.child_nodes)):
+                    if i != remaining_child_child_index and child.child_nodes[i] is not None:
+                        return False
+            else:
+                return False
+        return True
+
+
+class OctreeLeafNode(OctreeNode):
+    def __init__(self, parent: Octree, start_position_x: int, start_position_y: int, start_position_z: int,
+                 default_value: any):
+        OctreeNode.__init__(self, parent, start_position_x, start_position_y, start_position_z, SideLength,
+                            default_value)
+        parent.leafs.append(self)
+        self._index_offset = start_position_x + start_position_y * SideLength + start_position_z * SideLengthTwice
+        self._count = 0
+        self._x_axis_counts: List[int] = [0] * SideLength
+        self._y_axis_counts: List[int] = [0] * SideLength
+        self._z_axis_counts: List[int] = [0] * SideLength
+        self.grid: List[any] = [None] * GridLength
+        self.grid_taken: List[bool] = [False] * GridLength
+
+    def _get_index(self, x: int, y: int, z: int) -> int:
+        return x + y * SideLength + z * SideLengthTwice - self._index_offset
+
+    @staticmethod
+    def _get_index_local(x: int, y: int, z: int) -> int:
+        return x + y * SideLength + z * SideLengthTwice
+
+    @property
+    def is_leaf(self) -> bool:
+        return True
+
+    @property
+    def is_full(self) -> bool:
+        return self._count == GridLength
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    def get_value(self, x: int, y: int, z: int) -> any:
+        index = self._get_index(x, y, z)
+        return self.grid[index] if self.grid_taken[index] else self.default_value
+
+    def contains(self, x: int, y: int, z: int) -> bool:
+        return self.grid_taken[self._get_index(x, y, z)]
+
+    def add(self, x: int, y: int, z: int, value: any) -> bool:
+        if not self.bounds_set:
+            self.min_x = x
+            self.min_y = y
+            self.min_z = z
+            self.max_x = x + 1
+            self.max_y = y + 1
+            self.max_z = z + 1
+        else:
+            if x < self.min_x:
+                self.min_x = x
+            if y < self.min_y:
+                self.min_y = y
+            if z < self.min_z:
+                self.min_z = z
+            if x >= self.max_x:
+                self.max_x = x + 1
+            if y >= self.max_y:
+                self.max_y = y + 1
+            if z >= self.max_z:
+                self.max_z = z + 1
+
+        self.bounds_set = True
+        x -= self.start_position_x
+        y -= self.start_position_y
+        z -= self.start_position_z
+        index = self._get_index_local(x, y, z)
+        if not self.grid_taken[index]:
+            self._count += 1
+            self.grid_taken[index] = True
+            self.grid[index] = value
+            self._x_axis_counts[x] += 1
+            self._y_axis_counts[y] += 1
+            self._z_axis_counts[z] += 1
+            return True
+
+        self.grid[index] = value
+        return False
+
+    def remove(self, x: int, y: int, z: int) -> bool:
+        x -= self.start_position_x
+        y -= self.start_position_y
+        z -= self.start_position_z
+        index = self._get_index_local(x, y, z)
+        if not self.grid_taken[index]:
+            return False
+        self._count -= 1
+        self._x_axis_counts[x] -= 1
+        self._y_axis_counts[y] -= 1
+        self._z_axis_counts[z] -= 1
+        self.grid_taken[index] = False
+        self.grid[index] = self.default_value
+        self._update_not_empty_bounds()
+        return True
+
+    def _update_not_empty_bounds(self):
+        self.bounds_set = False
+        # X axis
+        for i in range(0, SideLength):
+            if self._x_axis_counts[i] > 0:
+                self.min_x = i + self.start_position_x
+                self.bounds_set = True
+                break
+
+        for i in range(SideLength - 1, -1, -1):
+            if self._x_axis_counts[i] > 0:
+                self.max_x = i + self.start_position_x + 1
+                self.bounds_set = True
+                break
+
+        # Y axis
+        for i in range(0, SideLength):
+            if self._y_axis_counts[i] > 0:
+                self.min_y = i + self.start_position_y
+                self.bounds_set = True
+                break
+
+        for i in range(SideLength - 1, -1, -1):
+            if self._y_axis_counts[i] > 0:
+                self.max_y = i + self.start_position_y + 1
+                self.bounds_set = True
+                break
+
+        # Z axis
+        for i in range(0, SideLength):
+            if self._z_axis_counts[i] > 0:
+                self.min_z = i + self.start_position_z
+                self.bounds_set = True
+                break
+
+        for i in range(SideLength - 1, -1, -1):
+            if self._z_axis_counts[i] > 0:
+                self.max_z = i + self.start_position_z + 1
+                self.bounds_set = True
+                break
+
+
+class OctreeIterator:
+    def __init__(self, octree: Octree):
+        self._leafs = octree.leafs.copy()
+        self._has_current = False
+        self._next_inside_leaf_index = 0
+        self._next_leaf_index = 0
+        self._current: Tuple[int, int, int, any] = (0, 0, 0, None)
+
+    @property
+    def current(self):
+        return self._current if self._has_current else None
+
+    def move_next(self) -> bool:
+        self._has_current = False
+        while self._next_leaf_index < len(self._leafs):
+            current_leaf = self._leafs[self._next_leaf_index]
+            while self._next_inside_leaf_index < GridLength:
+                if current_leaf.grid_taken[self._next_inside_leaf_index]:
+                    self._current = (
+                        LeafIndexXMap[self._next_inside_leaf_index] + current_leaf.start_position_x,
+                        LeafIndexYMap[self._next_inside_leaf_index] + current_leaf.start_position_y,
+                        LeafIndexZMap[self._next_inside_leaf_index] + current_leaf.start_position_z,
+                        current_leaf.grid[self._next_inside_leaf_index]
+                    )
+                    self._has_current = True
+                    self._next_inside_leaf_index += 1
+                    break
+                self._next_inside_leaf_index += 1
+            if self._has_current:
+                break
+            self._next_leaf_index += 1
+            self._next_inside_leaf_index = 0
+        return self._has_current
+
+    def reset(self):
+        self._has_current = False
+        self._next_inside_leaf_index = 0
+        self._next_leaf_index = 0
 
 
 class VoxelGrid:
     width: int
-    half_width: float
     depth: int
-    half_depth: float
     height: int
-    half_height: float
-    size: int
-    last_index_x: int
-    last_index_y: int
-    last_index_z: int
-    y_multiplier: int
-    z_multiplier: int
 
     def __init__(self, width: int, depth: int, height: int):
         self.width = width
         self.depth = depth
         self.height = height
-        self.half_width = width * 0.5
-        self.half_height = height * 0.5
-        self.half_depth = depth * 0.5
-        self.size = width * height * depth
-        self.last_index_x = width - 1
-        self.last_index_y = depth - 1
-        self.last_index_z = height - 1
-        self.y_multiplier = width
-        self.z_multiplier = depth * width
 
-    def get_index(self, x: int, y: int, z: int) -> int:
-        return z * self.z_multiplier + y * self.y_multiplier + x
-
-    def get_index_func(self,
-                       axis1_index: int,
-                       axis2_index: int,
-                       axis3_index: int
-                       ):
-        if axis1_index == 0 and axis2_index == 1 and axis3_index == 2:
-            return lambda x, y, z: z * self.z_multiplier + y * self.y_multiplier + x
-        if axis1_index == 1 and axis2_index == 0 and axis3_index == 2:
-            return lambda y, x, z: z * self.z_multiplier + y * self.y_multiplier + x
-        if axis1_index == 1 and axis2_index == 2 and axis3_index == 0:
-            return lambda y, z, x: z * self.z_multiplier + y * self.y_multiplier + x
-        if axis1_index == 0 and axis2_index == 2 and axis3_index == 1:
-            return lambda x, z, y: z * self.z_multiplier + y * self.y_multiplier + x
-        if axis1_index == 2 and axis2_index == 0 and axis3_index == 1:
-            return lambda z, x, y: z * self.z_multiplier + y * self.y_multiplier + x
-        # 2, 1, 0
-        return lambda z, y, x: z * self.z_multiplier + y * self.y_multiplier + x
-
-    def get_axis(self, axis_index: int) -> int:
-        return self.width if axis_index == 0 else (
-            self.depth if axis_index == 1 else self.height
-        )
-
-    def reduce_voxel_grid_to_hull(self, voxels: SparseArray, outside: SparseArray or None):
+    @staticmethod
+    def reduce_voxel_grid_to_hull(voxels: Octree, outside: Octree):
         if DEBUG_OUTPUT:
             print('[DEBUG] reduce_voxel_grid_to_hull')
         timer_start = time.time()
-        if outside is None:
-            for z in range(1, self.height - 1):
-                for y in range(1, self.depth - 1):
-                    for x in range(1, self.width - 1):
-                        del voxels[self.get_index(x, y, z)]
-        else:
-            for z in range(0, self.height):
-                last_z = z == self.last_index_z
-                first_z = z == 0
-                for y in range(0, self.depth):
-                    last_y = y == self.last_index_y
-                    first_y = y == 0
-                    for x in range(0, self.width):
-                        index = self.get_index(x, y, z)
-                        if voxels[index] is not None:
-                            # Left
-                            if x == 0 or outside[index - 1]:
-                                continue
-                            # Right
-                            if x == self.last_index_x or outside[index + 1]:
-                                continue
-                            # Down
-                            if first_y or outside[index - self.y_multiplier]:
-                                continue
-                            # Up
-                            if last_y or outside[index + self.y_multiplier]:
-                                continue
-                            # Back
-                            if first_z or outside[index - self.z_multiplier]:
-                                continue
-                            # Front
-                            if last_z or outside[index + self.z_multiplier]:
-                                continue
-                            # If not connected to the outside space, delete the voxel(inside hull)
-                            del voxels[index]
+        iterator = OctreeIterator(voxels)
+        while iterator.move_next():
+            (x, y, z, _) = iterator.current
+            # Left
+            if outside.get_value(x - 1, y, z):
+                continue
+            # Right
+            if outside.get_value(x + 1, y, z):
+                continue
+            # Down
+            if outside.get_value(x, y - 1, z):
+                continue
+            # Up
+            if outside.get_value(x, y + 1, z):
+                continue
+            # Back
+            if outside.get_value(x, y, z - 1):
+                continue
+            # Front
+            if outside.get_value(x, y, z + 1):
+                continue
+            # If not connected to the outside space, delete the voxel(inside hull)
+            voxels.remove(x, y, z)
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
 
-    def create_outside_grid(self, voxels: SparseArray, num_voxels: int) -> SparseArray or None:
-        if num_voxels == self.size:
-            # If we have a filled grid we already know there to exist no outside
-            return None
-        outside_indices = self.find_outside_indices(voxels)
-        if outside_indices is None:
-            # All is marked as outside to prevent any faces to be removed
-            return None
-        distinct_areas = self.find_distinct_areas(voxels)
+    @staticmethod
+    def create_outside_grid(voxels: Octree) -> Octree:
         if DEBUG_OUTPUT:
             print('[DEBUG] create_outside_grid')
         timer_start = time.time()
-        outside_labels = {distinct_areas[i] for i in outside_indices}
-        outside = SparseArray(False, {i: True for i in range(self.size) if distinct_areas[i] in outside_labels})
+        outside = Octree(default_value=True)
+        if voxels.is_not_empty:
+            bounds = voxels.not_empty_bounds
+            bounds = (bounds[0] - 1, bounds[1] - 1, bounds[2] - 1, bounds[3] + 1, bounds[4] + 1, bounds[5] + 1)
+            distinct_areas = VoxelGrid.find_distinct_areas(voxels, bounds)
+            outside_label = distinct_areas.get_value(bounds[0], bounds[1], bounds[2])
+            distinct_areas_iterator = OctreeIterator(distinct_areas)
+            while distinct_areas_iterator.move_next():
+                (x, y, z, _) = distinct_areas_iterator.current
+                if distinct_areas.get_value(x, y, z) != outside_label:
+                    outside.add(x, y, z, False)
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return outside
 
-    def find_distinct_areas(self, voxels: SparseArray) -> List[int]:
+    @staticmethod
+    def find_distinct_areas(voxels: Octree, bounds: Tuple[int, int, int, int, int, int]) -> Octree:
         """
         connected-component labeling (CCL) with the Hoshen–Kopelman algorithm
         modified to label all voxels -1 as we're only interested in non-voxel labels
@@ -423,94 +981,84 @@ class VoxelGrid:
         if DEBUG_OUTPUT:
             print('[DEBUG] find_distinct_areas')
         timer_start = time.time()
-        labels: List[int] = [-1] * self.size
-        equivalence_sets: List[Set[int]] = []
-        next_label = 0
-        for z in range(0, self.height):
-            for y in range(0, self.depth):
-                for x in range(0, self.width):
-                    index = self.get_index(x, y, z)
-                    if voxels[index] is None:
+        labels = Octree(voxels.size, default_value=0)
+        label_equivalence: Dict[int, Set[int]] = {0: set()}
+        next_label = 1
+        for z in range(bounds[2], bounds[5]):
+            for y in range(bounds[1], bounds[4]):
+                for x in range(bounds[0], bounds[3]):
+                    if voxels.get_value(x, y, z) is None:
                         possible_labels: Set[int] = set()
-                        if x > 0:
-                            left_index = self.get_index(x - 1, y, z)
-                            if voxels[left_index] is None:
-                                possible_labels.add(labels[left_index])
-                        if y > 0:
-                            back_index = self.get_index(x, y - 1, z)
-                            if voxels[back_index] is None:
-                                possible_labels.add(labels[back_index])
-                        if z > 0:
-                            down_index = self.get_index(x, y, z - 1)
-                            if voxels[down_index] is None:
-                                possible_labels.add(labels[down_index])
+                        if voxels.get_value(x - 1, y, z) is None:
+                            possible_labels.add(labels.get_value(x - 1, y, z))
+                        if voxels.get_value(x, y - 1, z) is None:
+                            possible_labels.add(labels.get_value(x, y - 1, z))
+                        if voxels.get_value(x, y, z - 1) is None:
+                            possible_labels.add(labels.get_value(x, y, z - 1))
                         if len(possible_labels) == 0:
-                            labels[index] = next_label
+                            labels.add(x, y, z, next_label)
+                            label_equivalence[next_label] = set()
                             next_label += 1
                         elif len(possible_labels) == 1:
-                            labels[index] = next(iter(possible_labels))
+                            labels.add(x, y, z, next(iter(possible_labels)))
+                        elif len(possible_labels) == 2:
+                            min_label = min(possible_labels)
+                            if min_label > 0:
+                                labels.add(x, y, z, min_label)
+                            tmp = list(possible_labels)
+                            if tmp[0] != tmp[1]:
+                                label_equivalence[tmp[0]].add(tmp[1])
+                                label_equivalence[tmp[1]].add(tmp[0])
                         else:
-                            labels[index] = min(possible_labels)
-                            equivalence_sets.append(possible_labels)
+                            min_label = min(possible_labels)
+                            if min_label > 0:
+                                labels.add(x, y, z, min_label)
+                            tmp = list(possible_labels)
+                            if tmp[0] != tmp[1]:
+                                label_equivalence[tmp[0]].add(tmp[1])
+                                label_equivalence[tmp[1]].add(tmp[0])
+                            if tmp[0] != tmp[2]:
+                                label_equivalence[tmp[0]].add(tmp[2])
+                                label_equivalence[tmp[2]].add(tmp[0])
+                            if tmp[1] != tmp[2]:
+                                label_equivalence[tmp[1]].add(tmp[2])
+                                label_equivalence[tmp[2]].add(tmp[1])
+                    else:
+                        labels.add(x, y, z, -1)
         # Collapse all overlapping sets until nothing changes anymore
         count = 0
-        while count != len(equivalence_sets):
-            count = len(equivalence_sets)
-            i = 0
-            while i < len(equivalence_sets):
-                s = equivalence_sets[i]
-                for j in range(len(equivalence_sets) - 1, i, -1):
-                    if not s.isdisjoint(equivalence_sets[j]):
-                        s.update(equivalence_sets[j])
-                        del equivalence_sets[j]
-                i += 1
+        while count != len(label_equivalence):
+            count = len(label_equivalence)
+            for label in range(0, next_label):
+                if label in label_equivalence:
+                    connections = label_equivalence[label]
+                    if len(connections) > 0:
+                        min_label = min(connections)
+                        if min_label < label:
+                            del label_equivalence[label]
+                            for connected_label in connections:
+                                if connected_label in label_equivalence:
+                                    next_connections = label_equivalence[connected_label]
+                                    for other_label in connections:
+                                        if other_label != connected_label:
+                                            next_connections.add(other_label)
         # Change all labels to the minimum of the equivalence set they belong to
-        for s in equivalence_sets:
-            min_label = min(s)
-            for i in range(0, self.size):
-                if labels[i] in s:
-                    labels[i] = min_label
+        label_map = {}
+        for key in label_equivalence:
+            for connection in label_equivalence[key]:
+                label_map[connection] = key
+        iterator = OctreeIterator(labels)
+        while iterator.move_next():
+            if iterator.current[3] in label_map:
+                value = label_map[iterator.current[3]]
+                if value > 0:
+                    labels.add(iterator.current[0], iterator.current[1], iterator.current[2], value)
+                else:
+                    labels.remove(iterator.current[0], iterator.current[1], iterator.current[2])
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return labels
-
-    def find_outside_indices(self, voxels: SparseArray) -> Set[int] or None:
-        if DEBUG_OUTPUT:
-            print('[DEBUG] find_outside_indices [%s, %s, %s]' % (self.width, self.depth, self.height))
-        timer_start = time.time()
-        outside_indices = set()
-        # Collect front/back outside indices
-        for z in range(0, self.height):
-            for x in range(0, self.width):
-                index = self.get_index(x, 0, z)
-                if voxels[index] is None:
-                    outside_indices.add(index)
-                index = self.get_index(x, self.last_index_y, z)
-                if voxels[index] is None:
-                    outside_indices.add(index)
-        # Collect bottom/top outside indices
-        for y in range(0, self.depth):
-            for x in range(0, self.width):
-                index = self.get_index(x, y, 0)
-                if voxels[index] is None:
-                    outside_indices.add(index)
-                index = self.get_index(x, y, self.last_index_z)
-                if voxels[index] is None:
-                    outside_indices.add(index)
-        # Collect left/right outside indices
-        for y in range(0, self.depth):
-            for z in range(0, self.height):
-                index = self.get_index(0, y, z)
-                if voxels[index] is None:
-                    outside_indices.add(index)
-                index = self.get_index(self.last_index_x, y, z)
-                if voxels[index] is None:
-                    outside_indices.add(index)
-        timer_end = time.time()
-        if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
-        return outside_indices if len(outside_indices) > 0 else None
 
 
 class Quad:
@@ -532,142 +1080,60 @@ class Quad:
 
 class SimpleCubesMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: SparseArray) -> List[Quad]:
+    def generate_mesh(voxels: Octree) -> List[Quad]:
         quads: List[Quad] = []
-        for x in range(0, grid.width):
-            for y in range(0, grid.depth):
-                for z in range(0, grid.height):
-                    color_index = voxels[grid.get_index(x, y, z)]
-                    if color_index is not None:
-                        # Left
-                        quads.append(Quad(
-                            (x, y, z),
-                            (x, y + 1, z),
-                            (x, y + 1, z + 1),
-                            (x, y, z + 1),
-                            (-1, 0, 0),
-                            color_index
-                        ))
-                        # Right
-                        quads.append(Quad(
-                            (x + 1, y, z),
-                            (x + 1, y, z + 1),
-                            (x + 1, y + 1, z + 1),
-                            (x + 1, y + 1, z),
-                            (1, 0, 0),
-                            color_index
-                        ))
-                        # Back
-                        quads.append(Quad(
-                            (x, y, z),
-                            (x, y, z + 1),
-                            (x + 1, y, z + 1),
-                            (x + 1, y, z),
-                            (0, -1, 0),
-                            color_index
-                        ))
-                        # Front
-                        quads.append(Quad(
-                            (x, y + 1, z),
-                            (x + 1, y + 1, z),
-                            (x + 1, y + 1, z + 1),
-                            (x, y + 1, z + 1),
-                            (0, 1, 0),
-                            color_index
-                        ))
-                        # Bottom
-                        quads.append(Quad(
-                            (x, y, z),
-                            (x + 1, y, z),
-                            (x + 1, y + 1, z),
-                            (x, y + 1, z),
-                            (0, 0, -1),
-                            color_index
-                        ))
-                        # Top
-                        quads.append(Quad(
-                            (x, y, z + 1),
-                            (x, y + 1, z + 1),
-                            (x + 1, y + 1, z + 1),
-                            (x + 1, y, z + 1),
-                            (0, 0, 1),
-                            color_index
-                        ))
+        iterator = OctreeIterator(voxels)
+        while iterator.move_next():
+            (x, y, z, color_index) = iterator.current
+            # Left
+            quads.append(Quad((x, y, z), (x, y + 1, z), (x, y + 1, z + 1), (x, y, z + 1), (-1, 0, 0), color_index))
+            # Right
+            quads.append(Quad((x + 1, y, z), (x + 1, y, z + 1), (x + 1, y + 1, z + 1), (x + 1, y + 1, z), (1, 0, 0),
+                              color_index))
+            # Back
+            quads.append(Quad((x, y, z), (x, y, z + 1), (x + 1, y, z + 1), (x + 1, y, z), (0, -1, 0), color_index))
+            # Front
+            quads.append(Quad((x, y + 1, z), (x + 1, y + 1, z), (x + 1, y + 1, z + 1), (x, y + 1, z + 1), (0, 1, 0),
+                              color_index))
+            # Bottom
+            quads.append(Quad((x, y, z), (x + 1, y, z), (x + 1, y + 1, z), (x, y + 1, z), (0, 0, -1), color_index))
+            # Top
+            quads.append(Quad((x, y, z + 1), (x, y + 1, z + 1), (x + 1, y + 1, z + 1), (x + 1, y, z + 1), (0, 0, 1),
+                              color_index))
         return quads
 
 
 class SimpleQuadsMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None) -> List[Quad]:
+    def generate_mesh(voxels: Octree, outside: Octree) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] SimpleQuadsMeshing generate_mesh')
         timer_start = time.time()
         quads: List[Quad] = []
-        for x in range(0, grid.width):
-            for y in range(0, grid.depth):
-                for z in range(0, grid.height):
-                    color_index = voxels[grid.get_index(x, y, z)]
-                    if color_index is not None:
-                        # Left
-                        if x == 0 or (outside is not None and outside[grid.get_index(x - 1, y, z)]):
-                            quads.append(Quad(
-                                (x, y + 1, z),
-                                (x, y + 1, z + 1),
-                                (x, y, z + 1),
-                                (x, y, z),
-                                (-1, 0, 0),
-                                color_index
-                            ))
-                        # Right
-                        if x == grid.last_index_x or (outside is not None and outside[grid.get_index(x + 1, y, z)]):
-                            quads.append(Quad(
-                                (x + 1, y, z),
-                                (x + 1, y, z + 1),
-                                (x + 1, y + 1, z + 1),
-                                (x + 1, y + 1, z),
-                                (1, 0, 0),
-                                color_index
-                            ))
-                        # Back
-                        if y == 0 or (outside is not None and outside[grid.get_index(x, y - 1, z)]):
-                            quads.append(Quad(
-                                (x, y, z),
-                                (x, y, z + 1),
-                                (x + 1, y, z + 1),
-                                (x + 1, y, z),
-                                (0, -1, 0),
-                                color_index
-                            ))
-                        # Front
-                        if y == grid.last_index_y or (outside is not None and outside[grid.get_index(x, y + 1, z)]):
-                            quads.append(Quad(
-                                (x + 1, y + 1, z),
-                                (x + 1, y + 1, z + 1),
-                                (x, y + 1, z + 1),
-                                (x, y + 1, z),
-                                (0, 1, 0),
-                                color_index
-                            ))
-                        # Bottom
-                        if z == 0 or (outside is not None and outside[grid.get_index(x, y, z - 1)]):
-                            quads.append(Quad(
-                                (x, y + 1, z),
-                                (x, y, z),
-                                (x + 1, y, z),
-                                (x + 1, y + 1, z),
-                                (0, 0, -1),
-                                color_index
-                            ))
-                        # Top
-                        if z == grid.last_index_z or (outside is not None and outside[grid.get_index(x, y, z + 1)]):
-                            quads.append(Quad(
-                                (x, y, z + 1),
-                                (x, y + 1, z + 1),
-                                (x + 1, y + 1, z + 1),
-                                (x + 1, y, z + 1),
-                                (0, 0, 1),
-                                color_index
-                            ))
+        iterator = OctreeIterator(voxels)
+        while iterator.move_next():
+            (x, y, z, color_index) = iterator.current
+            # Left
+            if outside.get_value(x - 1, y, z):
+                quads.append(Quad((x, y + 1, z), (x, y + 1, z + 1), (x, y, z + 1), (x, y, z), (-1, 0, 0), color_index))
+            # Right
+            if outside.get_value(x + 1, y, z):
+                quads.append(Quad((x + 1, y, z), (x + 1, y, z + 1), (x + 1, y + 1, z + 1), (x + 1, y + 1, z), (1, 0, 0),
+                                  color_index))
+            # Back
+            if outside.get_value(x, y - 1, z):
+                quads.append(Quad((x, y, z), (x, y, z + 1), (x + 1, y, z + 1), (x + 1, y, z), (0, -1, 0), color_index))
+            # Front
+            if outside.get_value(x, y + 1, z):
+                quads.append(Quad((x + 1, y + 1, z), (x + 1, y + 1, z + 1), (x, y + 1, z + 1), (x, y + 1, z), (0, 1, 0),
+                                  color_index))
+            # Bottom
+            if outside.get_value(x, y, z - 1):
+                quads.append(Quad((x, y + 1, z), (x, y, z), (x + 1, y, z), (x + 1, y + 1, z), (0, 0, -1), color_index))
+            # Top
+            if outside.get_value(x, y, z + 1):
+                quads.append(Quad((x, y, z + 1), (x, y + 1, z + 1), (x + 1, y + 1, z + 1), (x + 1, y, z + 1), (0, 0, 1),
+                                  color_index))
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
@@ -676,27 +1142,30 @@ class SimpleQuadsMeshing:
 
 class GreedyMeshing:
     @staticmethod
-    def generate_mesh(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None,
-                      ignore_color: bool = False) -> List[Quad]:
+    def generate_mesh(voxels: Octree, outside: Octree, ignore_color: bool = False) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] GreedyMeshing generate_mesh')
         timer_start = time.time()
         quads: List[Quad] = []
-        GreedyMeshing.mesh_axis(grid, voxels, outside, ignore_color, 0, quads)
-        GreedyMeshing.mesh_axis(grid, voxels, outside, ignore_color, 1, quads)
-        GreedyMeshing.mesh_axis(grid, voxels, outside, ignore_color, 2, quads)
+        bounds = voxels.not_empty_bounds
+        GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 0, quads)
+        GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 1, quads)
+        GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 2, quads)
         timer_end = time.time()
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (timer_end - timer_start))
         return quads
 
     @staticmethod
-    def mesh_axis(grid: VoxelGrid, voxels: SparseArray, outside: SparseArray or None, ignore_color: bool,
+    def mesh_axis(bounds: Tuple[int, int, int, int, int, int], voxels: Octree, outside: Octree, ignore_color: bool,
                   axis_index: int, quads: List[Quad]):
-        axis1_index = 1 if axis_index == 0 else 0
-        axis2_index = 1 if axis_index == 2 else 2
-        get_index = grid.get_index_func(axis_index, axis1_index, axis2_index)
-        get_vector = GreedyMeshing.get_vector_func(axis_index, axis1_index, axis2_index)
+        axis1_index = {0: 1, 1: 2, 2: 0}[axis_index]
+        axis2_index = {0: 2, 1: 0, 2: 1}[axis_index]
+
+        def get_axis(i):
+            return {0: bounds[3] - bounds[0], 1: bounds[4] - bounds[1], 2: bounds[5] - bounds[2]}[i]
+
+        get_vector = GreedyMeshing.get_vector_func(bounds, axis_index, axis1_index, axis2_index)
         normals: List[Tuple[float, float, float]] = [
             (
                 -1 if axis_index == 0 else 0,
@@ -710,17 +1179,16 @@ class GreedyMeshing:
             )
         ]
         normal_offsets = [-1, 1]
-        for a in range(0, grid.get_axis(axis_index)):
-            has_offset = [a > 0, a < grid.get_axis(axis_index) - 1]
+        for a in range(0, get_axis(axis_index)):
+            has_offset = [a > 0, a < get_axis(axis_index) - 1]
             visited = [
-                [False] * grid.get_axis(axis1_index) * grid.get_axis(axis2_index),
-                [False] * grid.get_axis(axis1_index) * grid.get_axis(axis2_index)
+                [False] * get_axis(axis1_index) * get_axis(axis2_index),
+                [False] * get_axis(axis1_index) * get_axis(axis2_index)
             ]
-            for b in range(0, grid.get_axis(axis1_index)):
-                for c in range(0, grid.get_axis(axis2_index)):
-                    visited_start_index = b * grid.get_axis(axis2_index) + c
-                    grid_start_index = get_index(a, b, c)
-                    start_voxel = voxels[grid_start_index]
+            for b in range(0, get_axis(axis1_index)):
+                for c in range(0, get_axis(axis2_index)):
+                    visited_start_index = b * get_axis(axis2_index) + c
+                    start_voxel = voxels.get_value(*get_vector(a, b, c))
                     if start_voxel is None:
                         visited[0][visited_start_index] = True
                         visited[1][visited_start_index] = True
@@ -730,43 +1198,39 @@ class GreedyMeshing:
                         for visited_index in range(0, 2):
                             if not visited[visited_index][visited_start_index]:
                                 a_back = a + normal_offsets[visited_index]
-                                if has_offset[visited_index]:
-                                    if outside is None or not outside[get_index(a_back, b, c)]:
-                                        visited[visited_index][visited_start_index] = True
-                                        continue
+                                if has_offset[visited_index] and not outside.get_value(*get_vector(a_back, b, c)):
+                                    visited[visited_index][visited_start_index] = True
+                                    continue
                                 # Move first axis until end or voxel mismatch
                                 end_index_axis1 = b
                                 found_end_axis1 = False
-                                for i in range(b + 1, grid.get_axis(axis1_index)):
-                                    iter_visited_index = i * grid.get_axis(axis2_index) + c
-                                    iter_index = get_index(a, i, c)
-                                    iter_voxel = voxels[iter_index]
-                                    is_color_not_equal = not ignore_color and start_voxel != iter_voxel
+                                for i in range(b + 1, get_axis(axis1_index)):
+                                    iter_visited_index = i * get_axis(axis2_index) + c
+                                    iter_voxel = voxels.get_value(*get_vector(a, i, c))
                                     if (
                                             # No voxel found...
                                             iter_voxel is None or
                                             # ...or already visited...
                                             visited[visited_index][iter_visited_index] or
                                             # ...or different color...
-                                            is_color_not_equal or
+                                            (not ignore_color and start_voxel != iter_voxel) or
                                             # ... or not connected to the outside space
-                                            (has_offset[visited_index] and (
-                                                    outside is None or not outside[get_index(a_back, i, c)]))
+                                            (has_offset[visited_index] and
+                                             not outside.get_value(*get_vector(a_back, i, c)))
                                     ):
                                         end_index_axis1 = i - 1
                                         found_end_axis1 = True
                                         break
                                 if not found_end_axis1:
-                                    end_index_axis1 = grid.get_axis(axis1_index) - 1
+                                    end_index_axis1 = get_axis(axis1_index) - 1
                                 # Move second axis until end or voxel row mismatch
                                 end_index_axis2 = c
                                 found_end_axis2 = False
-                                for j in range(c + 1, grid.get_axis(axis2_index)):
+                                for j in range(c + 1, get_axis(axis2_index)):
                                     any_mismatch_in_row = False
                                     for i in range(b, end_index_axis1 + 1):
-                                        iter_visited_index = i * grid.get_axis(axis2_index) + j
-                                        iter_index = get_index(a, i, j)
-                                        iter_voxel = voxels[iter_index]
+                                        iter_visited_index = i * get_axis(axis2_index) + j
+                                        iter_voxel = voxels.get_value(*get_vector(a, i, j))
                                         is_color_not_equal = not ignore_color and start_voxel != iter_voxel
                                         if (
                                                 # No voxel found...
@@ -776,8 +1240,8 @@ class GreedyMeshing:
                                                 # ...or different color...
                                                 is_color_not_equal or
                                                 # ... or not connected to the outside space
-                                                (has_offset[visited_index] and (
-                                                        outside is None or not outside[get_index(a_back, i, j)]))
+                                                (has_offset[visited_index] and
+                                                 not outside.get_value(*get_vector(a_back, i, j)))
                                         ):
                                             any_mismatch_in_row = True
                                             break
@@ -786,11 +1250,11 @@ class GreedyMeshing:
                                         found_end_axis2 = True
                                         break
                                 if not found_end_axis2:
-                                    end_index_axis2 = grid.get_axis(axis2_index) - 1
+                                    end_index_axis2 = get_axis(axis2_index) - 1
                                 # Mark area as visited
                                 for i in range(b, end_index_axis1 + 1):
                                     for j in range(c, end_index_axis2 + 1):
-                                        visited[visited_index][i * grid.get_axis(axis2_index) + j] = True
+                                        visited[visited_index][i * get_axis(axis2_index) + j] = True
                                 # Store quad
                                 a_visited = a if visited_index == 0 else a + 1
                                 p1 = get_vector(a_visited, b, c)
@@ -862,19 +1326,20 @@ class GreedyMeshing:
         return quad
 
     @staticmethod
-    def get_vector_func(axis_index: int, axis1_index: int, axis2_index: int):
+    def get_vector_func(bounds: Tuple[int, int, int, int, int, int], axis_index: int, axis1_index: int,
+                        axis2_index: int):
         if axis_index == 0 and axis1_index == 1 and axis2_index == 2:
-            return lambda x, y, z: (x, y, z)
+            return lambda x, y, z: (bounds[0] + x, bounds[1] + y, bounds[2] + z)
         if axis_index == 1 and axis1_index == 0 and axis2_index == 2:
-            return lambda y, x, z: (x, y, z)
+            return lambda y, x, z: (bounds[0] + x, bounds[1] + y, bounds[2] + z)
         if axis_index == 1 and axis1_index == 2 and axis2_index == 0:
-            return lambda y, z, x: (x, y, z)
+            return lambda y, z, x: (bounds[0] + x, bounds[1] + y, bounds[2] + z)
         if axis_index == 0 and axis1_index == 2 and axis2_index == 1:
-            return lambda x, z, y: (x, y, z)
+            return lambda x, z, y: (bounds[0] + x, bounds[1] + y, bounds[2] + z)
         if axis_index == 2 and axis1_index == 0 and axis2_index == 1:
-            return lambda z, x, y: (x, y, z)
+            return lambda z, x, y: (bounds[0] + x, bounds[1] + y, bounds[2] + z)
         # 2, 1, 0
-        return lambda z, y, x: (x, y, z)
+        return lambda z, y, x: (bounds[0] + x, bounds[1] + y, bounds[2] + z)
 
 
 class VoxMaterial:
@@ -945,9 +1410,9 @@ class VoxMaterial:
     def __str__(self):
         return ("VoxMaterial {type: %s, roughness: %s, metallic: %s, specular: %s, ior: %s, emission: %s, " +
                 "flux: %s, ldr: %s, transmission: %s, media_type: %s, density: %s, phase: %s}") % (
-                   self.type, self.roughness, self.metallic, self.specular, self.ior, self.emission, self.flux,
-                   self.ldr,
-                   self.transmission, self.media_type, self.density, self.phase)
+            self.type, self.roughness, self.metallic, self.specular, self.ior, self.emission, self.flux,
+            self.ldr,
+            self.transmission, self.media_type, self.density, self.phase)
 
 
 class VoxMesh:
@@ -955,12 +1420,11 @@ class VoxMesh:
         self.model_id = model_id
         self.num_voxels = 0
         self.grid: VoxelGrid = VoxelGrid(width, depth, height)
-        self.voxels = SparseArray(None)
+        self.voxels = Octree()
         self.used_color_indices: Set[int] = set()
 
     def get_voxel_color_index(self, x: int, y: int, z: int) -> int or None:
-        index = self.grid.get_index(x, y, z)
-        return self.voxels[index]
+        return self.voxels.get_value(x, y, z)
 
 
 class VoxNode:
@@ -996,6 +1460,7 @@ class VoxNode:
         else:
             return mathutils.Matrix()
 
+    # noinspection PyUnresolvedReferences
     def get_transform_rotation(self, frame: int):
         transform = self.get_transform(frame)
         rotation = mathutils.Matrix()
@@ -1355,15 +1820,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             mesh_index = -1
             for mesh in result.meshes:
                 if DEBUG_OUTPUT:
+                    bounds = mesh.voxels.not_empty_bounds
                     print('[DEBUG] Generate model %s with size [%s, %s, %s]' % (
-                        mesh.model_id, mesh.grid.width, mesh.grid.depth, mesh.grid.height))
+                        mesh.model_id, bounds[3] - bounds[0], bounds[4] - bounds[1], bounds[5] - bounds[2]))
                 generated_mesh_models = []
                 mesh_index += 1
                 # Skip empty models
                 if mesh.num_voxels == 0:
                     model_id_object_lookup[mesh_index] = []
                     continue
-                outside = mesh.grid.create_outside_grid(mesh.voxels, mesh.num_voxels)
+                outside = mesh.grid.create_outside_grid(mesh.voxels)
                 # =====================================================
                 # CUBES_AS_OBJ
                 # =====================================================
@@ -1371,54 +1837,53 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     if self.voxel_hull:
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
                     faces = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]]
-                    for x in range(0, mesh.grid.width):
-                        for y in range(0, mesh.grid.depth):
-                            for z in range(0, mesh.grid.height):
-                                color_index = mesh.get_voxel_color_index(x, y, z)
-                                if color_index is not None:
-                                    vertices = []
-                                    vertices.append(self.get_vertex_pos((x, y, z), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x + 1, y, z), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x, y + 1, z), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x + 1, y + 1, z), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x, y, z + 1), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x + 1, y, z + 1), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x, y + 1, z + 1), mesh.grid))
-                                    vertices.append(self.get_vertex_pos((x + 1, y + 1, z + 1), mesh.grid))
-                                    new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
-                                    new_mesh.from_pydata(vertices, [], faces)
-                                    new_mesh.update()
-                                    if self.material_mode == "VERTEX_COLOR":
-                                        new_mesh.materials.append(materials[0])
-                                        new_mesh.vertex_colors.new()
-                                        vertex_colors = new_mesh.vertex_colors[0].data
-                                        color = result.get_color(color_index)
-                                        for i in range(len(faces) * 4):
-                                            vertex_colors[i].color = color
-                                        if self.import_material_props:
-                                            new_mesh.vertex_colors.new()
-                                            new_mesh.vertex_colors[1].name = "Mat"
-                                            vertex_colors_mat = new_mesh.vertex_colors[1].data
-                                            material = result.materials[color_index]
-                                            mat_color = (material.roughness, material.metallic, material.ior, 0.0)
-                                            for i in range(len(faces) * 4):
-                                                vertex_colors_mat[i].color = mat_color
-                                    elif self.material_mode == "MAT_AS_TEX":
-                                        new_mesh.materials.append(materials[0])
-                                        uv_layer = new_mesh.uv_layers.new(name="UVMap")
-                                        # Color index as pixel x position + 0.5 offset for the center of the pixel
-                                        uv_x = (color_index + 0.5) / 256.0
-                                        for i in range(len(faces) * 4):
-                                            uv_layer.data[i].uv = [uv_x, 0.5]
-                                    elif self.material_mode == "MAT_PER_COLOR":
-                                        material_index = color_index_material_map[color_index]
-                                        new_mesh.materials.append(materials[material_index])
-                                        for i, face in enumerate(new_mesh.polygons):
-                                            face.material_index = 1
-                                    new_object = bpy.data.objects.new("model_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z),
-                                                                      new_mesh)
-                                    voxel_collection.objects.link(new_object)
-                                    generated_mesh_models.append(new_object)
+                    voxel_iterator = OctreeIterator(mesh.voxels)
+                    while voxel_iterator.move_next():
+                        (x, y, z, color_index) = voxel_iterator.current
+                        new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
+                        vertices = [
+                            self.get_vertex_pos((x, y, z), mesh.grid),
+                            self.get_vertex_pos((x + 1, y, z), mesh.grid),
+                            self.get_vertex_pos((x, y + 1, z), mesh.grid),
+                            self.get_vertex_pos((x + 1, y + 1, z), mesh.grid),
+                            self.get_vertex_pos((x, y, z + 1), mesh.grid),
+                            self.get_vertex_pos((x + 1, y, z + 1), mesh.grid),
+                            self.get_vertex_pos((x, y + 1, z + 1), mesh.grid),
+                            self.get_vertex_pos((x + 1, y + 1, z + 1), mesh.grid)
+                        ]
+                        new_mesh.from_pydata(vertices, [], faces)
+                        new_mesh.update()
+                        if self.material_mode == "VERTEX_COLOR":
+                            new_mesh.materials.append(materials[0])
+                            new_mesh.vertex_colors.new()
+                            vertex_colors = new_mesh.vertex_colors[0].data
+                            color = result.get_color(color_index)
+                            for i in range(len(faces) * 4):
+                                vertex_colors[i].color = color
+                            if self.import_material_props:
+                                new_mesh.vertex_colors.new()
+                                new_mesh.vertex_colors[1].name = "Mat"
+                                vertex_colors_mat = new_mesh.vertex_colors[1].data
+                                material = result.materials[color_index]
+                                mat_color = (material.roughness, material.metallic, material.ior, 0.0)
+                                for i in range(len(faces) * 4):
+                                    vertex_colors_mat[i].color = mat_color
+                        elif self.material_mode == "MAT_AS_TEX":
+                            new_mesh.materials.append(materials[0])
+                            uv_layer = new_mesh.uv_layers.new(name="UVMap")
+                            # Color index as pixel x position + 0.5 offset for the center of the pixel
+                            uv_x = (color_index + 0.5) / 256.0
+                            for i in range(len(faces) * 4):
+                                uv_layer.data[i].uv = [uv_x, 0.5]
+                        elif self.material_mode == "MAT_PER_COLOR":
+                            material_index = color_index_material_map[color_index]
+                            new_mesh.materials.append(materials[material_index])
+                            for i, face in enumerate(new_mesh.polygons):
+                                face.material_index = 1
+                        new_object = bpy.data.objects.new("model_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z),
+                                                          new_mesh)
+                        voxel_collection.objects.link(new_object)
+                        generated_mesh_models.append(new_object)
                 # =====================================================
                 # Other meshing types
                 # =====================================================
@@ -1426,14 +1891,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     if self.meshing_type == "GREEDY":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
                         ignore_color = self.material_mode in ["NONE", "TEXTURED_MODEL"]
-                        quads = GreedyMeshing.generate_mesh(mesh.grid, mesh.voxels, outside, ignore_color)
+                        quads = GreedyMeshing.generate_mesh(mesh.voxels, outside, ignore_color)
                     elif self.meshing_type == "SIMPLE_QUADS":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
-                        quads = SimpleQuadsMeshing.generate_mesh(mesh.grid, mesh.voxels, outside)
+                        quads = SimpleQuadsMeshing.generate_mesh(mesh.voxels, outside)
                     elif self.meshing_type == "SIMPLE_CUBES":
                         if self.voxel_hull:
                             mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
-                        quads = SimpleCubesMeshing.generate_mesh(mesh.grid, mesh.voxels)
+                        quads = SimpleCubesMeshing.generate_mesh(mesh.voxels)
                     else:
                         self.report({"WARNING"}, "Unknown meshing type %s" % self.meshing_type)
                         quads = []
@@ -1801,10 +2266,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         mesh = model.meshes[-1]
         mesh.num_voxels = num_voxels
         voxel_data = struct.unpack('%sB' % (num_voxels * 4), f.read(num_voxels * 4))
-        mesh.voxels = SparseArray(None, {
-            mesh.grid.get_index(voxel_data[i], voxel_data[i + 1], voxel_data[i + 2]): voxel_data[i + 3]
-            for i in range(0, num_voxels * 4, 4)
-        })
+        for i in range(0, num_voxels * 4, 4):
+            mesh.voxels.add(voxel_data[i], voxel_data[i + 1], voxel_data[i + 2], voxel_data[i + 3])
         mesh.used_color_indices.update({voxel_data[i + 3] for i in range(0, num_voxels * 4, 4)})
 
     @staticmethod
