@@ -1641,7 +1641,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             links.new(separate_rgb_node.outputs["G"], bdsf_node.inputs["Metallic"])
             links.new(separate_rgb_node.outputs["B"], bdsf_node.inputs["IOR"])
             bdsf_node.inputs["Emission Strength"].default_value = 0
-            links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Emission"])
+            emission_color_input = (bdsf_node.inputs["Emission Color"] if "Emission Color" in bdsf_node.inputs else
+                                    bdsf_node.inputs["Emission"])
+            links.new(vertex_color_node.outputs["Color"], emission_color_input)
         links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Base Color"])
         return [vertex_color_mat]
 
@@ -1664,12 +1666,18 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     bdsf_node.inputs["Metallic"].default_value = material.metallic
                     bdsf_node.inputs["IOR"].default_value = material.ior
                     bdsf_node.inputs["Emission Strength"].default_value = 0
-                    bdsf_node.inputs["Emission"].default_value = color
+                    if "Emission Color" in bdsf_node.inputs:
+                        bdsf_node.inputs["Emission Color"].default_value = color
+                    else:
+                        bdsf_node.inputs["Emission"].default_value = color
                     if material.type == VoxMaterial.TYPE_EMIT:
                         bdsf_node.inputs["Emission Strength"].default_value = material.emission
                     elif material.type in [VoxMaterial.TYPE_MEDIA, VoxMaterial.TYPE_GLASS, VoxMaterial.TYPE_BLEND]:
                         bdsf_node.inputs["Base Color"].default_value = (1, 1, 1, 1)
-                        bdsf_node.inputs["Transmission"].default_value = 1.0
+                        if "Transmission Weight" in bdsf_node.inputs:
+                            bdsf_node.inputs["Transmission Weight"].default_value = 1.0
+                        else:
+                            bdsf_node.inputs["Transmission"].default_value = 1.0
                         if material.media_type == VoxMaterial.MEDIA_TYPE_ABSORB:
                             absorb_node = nodes.new("ShaderNodeVolumeAbsorption")
                             absorb_node.inputs["Color"].default_value = color
