@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.4.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.0)
+
+  * **[change]** #7 Populate model material slots with defaults before loading
+  * **[feature]** #8 Improve performance by moving from sparse array to octree
+
 ## [v1.3.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.3.0)
 
   * **[change]** Material modes with additional material properties moved to checkbox
