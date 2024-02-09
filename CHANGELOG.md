@@ -1,6 +1,6 @@
 # Changelog
 
-## [v1.4.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.0)
+## [v1.4.1](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.1)
 
   * **[change]** #7 Populate model material slots with defaults before loading
   * **[feature]** #8 Improve performance by moving from sparse array to octree

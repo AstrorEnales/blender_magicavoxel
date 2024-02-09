@@ -1,6 +1,6 @@
 # MIT License
 #
-# Copyright (c) 2022 https://github.com/AstrorEnales
+# Copyright (c) 2024 https://github.com/AstrorEnales
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -57,7 +57,7 @@ from bpy_extras.io_utils import (
 bl_info = {
     "name": "MagicaVoxel VOX format",
     "author": "AstrorEnales",
-    "version": (1, 3, 0),
+    "version": (1, 4, 1),
     "blender": (3, 0, 0),
     "location": "File > Import-Export",
     "description": "Importer for MagicaVoxel VOX files",
