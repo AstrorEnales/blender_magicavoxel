@@ -1610,8 +1610,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=True,
     )
 
-    merge_models: BoolProperty(
-        name="Merge Models",
+    join_models: BoolProperty(
+        name="Join Models",
         description="",
         default=False,
     )
@@ -1744,7 +1744,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "voxel_size",
                 "voxel_hull",
                 "meshing_type",
-                "merge_models",
+                "join_models",
                 "max_texture_size",
                 "import_material_props",
             ),
@@ -1823,6 +1823,50 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 materials = self.create_materials_per_color(collection_name, result, color_index_material_map)
             elif self.material_mode == "MAT_AS_TEX":
                 materials = self.create_materials_as_textures(collection_name, result)
+            # =========================================================================================================
+            # Join models
+            if self.join_models:
+                combined_mesh = VoxMesh(0, -1, -1, -1)
+                for mesh in result.meshes:
+                    combined_mesh.used_color_indices.update(mesh.used_color_indices)
+                model_id_transforms_map = {}
+                self.get_model_world_transforms_recursive(result.nodes, result.nodes[0], [], model_id_transforms_map)
+                for model_id in model_id_transforms_map:
+                    mesh = result.meshes[model_id]
+                    for world_matrix in model_id_transforms_map[model_id]:
+                        voxel_iterator = OctreeIterator(mesh.voxels)
+                        while voxel_iterator.move_next():
+                            (x, y, z, value) = voxel_iterator.current
+                            target_position = world_matrix @ mathutils.Vector((
+                                x - math.floor(mesh.grid.width * 0.5),
+                                y - math.floor(mesh.grid.height * 0.5),
+                                z - math.floor(mesh.grid.depth * 0.5)
+                            ))
+                            combined_mesh.voxels.add(int(target_position[0]), int(target_position[1]),
+                                                     int(target_position[2]), value)
+                bounds = combined_mesh.voxels.not_empty_bounds
+                combined_mesh.width = bounds[3] - bounds[0]
+                combined_mesh.height = bounds[4] - bounds[1]
+                combined_mesh.depth = bounds[5] - bounds[2]
+                combined_mesh.num_voxels = combined_mesh.voxels.count
+                result.meshes = [combined_mesh]
+                root_trn = VoxNode("TRN")
+                root_trn.node_id = 0
+                root_trn.frame_attributes[0] = {}
+                root_trn.child_ids.append(1)
+                root_grp = VoxNode("GRP")
+                root_grp.node_id = 1
+                root_grp.child_ids.append(2)
+                shape_trn = VoxNode("TRN")
+                shape_trn.node_id = 2
+                shape_trn.frame_attributes[0] = {}
+                shape_trn.child_ids.append(3)
+                shape_shp = VoxNode("SHP")
+                shape_shp.node_id = 3
+                shape_shp.meshes[0] = {}
+                result.nodes = {root_trn.node_id: root_trn, root_grp.node_id: root_grp, shape_trn.node_id: shape_trn,
+                                shape_shp.node_id: shape_shp}
+            # =========================================================================================================
             # Create models
             model_id_object_lookup = {}
             mesh_index = -1
@@ -2207,6 +2251,25 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             self.recurse_hierarchy(voxel_collection, nodes, nodes[child_id], next_path, next_path_objects,
                                    model_id_object_lookup)
 
+    def get_model_world_transforms_recursive(self, nodes: Dict[int, VoxNode], node: VoxNode, path,
+                                             result: Dict[int, List[mathutils.Matrix]]):
+        if node.type == 'SHP':
+            for model_id in node.meshes:
+                mesh_attributes = node.meshes[model_id]
+                mesh_frame = mesh_attributes["_f"] if "_f" in mesh_attributes else 0
+                matrix_world = mathutils.Matrix()
+                for i in range(len(path) - 1, 0, -1):
+                    next_node = nodes[path[i]]
+                    if next_node.type == 'TRN':
+                        translation = next_node.get_transform_translation(mesh_frame, self.voxel_size)
+                        rotation = next_node.get_transform_rotation(mesh_frame)
+                        matrix_world = translation @ rotation @ matrix_world
+                if model_id not in result:
+                    result[model_id] = []
+                result[model_id].append(matrix_world)
+        for child_id in node.child_ids:
+            self.get_model_world_transforms_recursive(nodes, nodes[child_id], path + [node.node_id], result)
+
     def get_vertex_pos(self, p: Tuple[float, float, float], grid: VoxelGrid) -> Tuple[float, float, float]:
         return (
             (p[0] - math.floor(grid.width * 0.5)) * self.voxel_size,
@@ -2456,10 +2519,16 @@ class VOX_PT_import_geometry(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, "import_hierarchy")
+        if operator.join_models:
+            operator.import_hierarchy = False
+            row = layout.row()
+            row.enabled = False
+            row.prop(operator, "import_hierarchy")
+        else:
+            layout.prop(operator, "import_hierarchy")
+        # layout.prop(operator, "join_models")
 
         layout.prop(operator, "voxel_size")
-        # TODO layout.row().prop(operator, "merge_models")
         layout.row().prop(operator, "meshing_type")
         if operator.meshing_type in ["CUBES_AS_OBJ", "SIMPLE_CUBES"]:
             layout.row().prop(operator, "voxel_hull")
