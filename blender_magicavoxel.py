@@ -34,7 +34,7 @@ File format info:
 https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox.txt
 https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox-extension.txt
 """
-
+import io
 import time
 import bpy
 import os
@@ -1428,8 +1428,8 @@ class VoxMesh:
 
 
 class VoxNode:
-    def __init__(self):
-        self.type = "TRN"  # "TRN" or "GRP" or "SHP"
+    def __init__(self, type: str):
+        self.type = type
         self.node_id = -1
         self.layer_id = -1
         self.node_attributes: Dict[str, str] = {}
@@ -2215,7 +2215,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         )
 
     def load_vox(self, filepath: str) -> VoxModel or None:
-        with open(filepath, "rb") as f:
+        with io.FileIO(filepath, "r") as f:
             if ImportVOX.read_riff_id(f) != "VOX ":
                 self.report({"WARNING"}, "File is not in VOX format")
                 return None
@@ -2269,14 +2269,15 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         model.meshes.append(mesh)
 
     @staticmethod
-    def read_xyzi_chunk(f: IO, model: VoxModel):
+    def read_xyzi_chunk(f: io.FileIO, model: VoxModel):
         num_voxels = ImportVOX.read_int32(f)
         mesh = model.meshes[-1]
         mesh.num_voxels = num_voxels
-        voxel_data = struct.unpack('%sB' % (num_voxels * 4), f.read(num_voxels * 4))
-        for i in range(0, num_voxels * 4, 4):
-            mesh.voxels.add(voxel_data[i], voxel_data[i + 1], voxel_data[i + 2], voxel_data[i + 3])
-        mesh.used_color_indices.update({voxel_data[i + 3] for i in range(0, num_voxels * 4, 4)})
+        voxel_data = bytearray(num_voxels * 4)
+        f.readinto(voxel_data)
+        for i in range(0, len(voxel_data), 4):
+            mesh.voxels.add(int(voxel_data[i]), int(voxel_data[i + 1]), int(voxel_data[i + 2]), int(voxel_data[i + 3]))
+        mesh.used_color_indices.update({int(voxel_data[i + 3]) for i in range(0, len(voxel_data), 4)})
 
     @staticmethod
     def read_rcam_chunk(f: IO, model: VoxModel):
@@ -2289,8 +2290,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_ntrn_chunk(f: IO, model: VoxModel):
-        node = VoxNode()
-        node.type = "TRN"
+        node = VoxNode("TRN")
         node.node_id = ImportVOX.read_int32(f)
         node.node_attributes = ImportVOX.read_dict(f)
         child_node_id = ImportVOX.read_int32(f)
@@ -2303,8 +2303,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_ngrp_chunk(f: IO, model: VoxModel):
-        node = VoxNode()
-        node.type = "GRP"
+        node = VoxNode("GRP")
         node.node_id = ImportVOX.read_int32(f)
         node.node_attributes = ImportVOX.read_dict(f)
         num_child_ids = ImportVOX.read_int32(f)
@@ -2315,8 +2314,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_nshp_chunk(f: IO, model: VoxModel):
-        node = VoxNode()
-        node.type = "SHP"
+        node = VoxNode("SHP")
         node.node_id = ImportVOX.read_int32(f)
         node.node_attributes = ImportVOX.read_dict(f)
         num_models = ImportVOX.read_int32(f)
@@ -2396,7 +2394,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         # color palette names are ignored
 
     @staticmethod
-    def read_next_chunk(f: IO, model: VoxModel):
+    def read_next_chunk(f: io.FileIO, model: VoxModel):
         riff_id = ImportVOX.read_riff_id(f)
         content_byte_length = ImportVOX.read_int32(f)
         ImportVOX.read_int32(f)  # children_byte_length
