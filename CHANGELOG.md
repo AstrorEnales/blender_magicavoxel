@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.4.3](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.3)
+
+  * **[fix]** Fix missing voxels regression after introducing octrees
+
 ## [v1.4.2](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.2)
 
   * **[fix]** Fix BDSF input keys for Blender 4

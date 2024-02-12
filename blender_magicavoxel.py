@@ -57,7 +57,7 @@ from bpy_extras.io_utils import (
 bl_info = {
     "name": "MagicaVoxel VOX format",
     "author": "AstrorEnales",
-    "version": (1, 4, 2),
+    "version": (1, 4, 3),
     "blender": (3, 0, 0),
     "location": "File > Import-Export",
     "description": "Importer for MagicaVoxel VOX files",
@@ -369,13 +369,13 @@ class Octree:
             new_child.child_nodes[ChildXnYnZn] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXpYpZp] = new_child
 
         child = self._root.child_nodes[ChildXpYpZn]
@@ -385,13 +385,13 @@ class Octree:
             new_child.child_nodes[ChildXnYnZp] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXpYpZn] = new_child
 
         child = self._root.child_nodes[ChildXnYpZp]
@@ -401,13 +401,13 @@ class Octree:
             new_child.child_nodes[ChildXpYnZn] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXnYpZp] = new_child
 
         child = self._root.child_nodes[ChildXnYpZn]
@@ -417,13 +417,13 @@ class Octree:
             new_child.child_nodes[ChildXpYnZp] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXnYpZn] = new_child
 
         # Y-
@@ -434,13 +434,13 @@ class Octree:
             new_child.child_nodes[ChildXnYpZn] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXpYnZp] = new_child
 
         child = self._root.child_nodes[ChildXpYnZn]
@@ -450,13 +450,13 @@ class Octree:
             new_child.child_nodes[ChildXnYpZp] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXpYnZn] = new_child
 
         child = self._root.child_nodes[ChildXnYnZp]
@@ -466,13 +466,13 @@ class Octree:
             new_child.child_nodes[ChildXpYpZn] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXnYnZp] = new_child
 
         child = self._root.child_nodes[ChildXnYnZn]
@@ -482,13 +482,13 @@ class Octree:
             new_child.child_nodes[ChildXpYpZp] = child
             new_child._count = child.count
             total_count += child.count
-            new_child.BoundsSet = child.bounds_set
-            new_child._min_x = child.min_x
-            new_child._min_y = child.min_y
-            new_child._min_z = child.min_z
-            new_child._max_x = child.max_x
-            new_child._max_y = child.max_y
-            new_child._max_z = child.max_z
+            new_child.bounds_set = child.bounds_set
+            new_child.min_x = child.min_x
+            new_child.min_y = child.min_y
+            new_child.min_z = child.min_z
+            new_child.max_x = child.max_x
+            new_child.max_y = child.max_y
+            new_child.max_z = child.max_z
             new_root.child_nodes[ChildXnYnZn] = new_child
 
         new_root._count = total_count
@@ -602,15 +602,7 @@ class OctreeBranchNode(OctreeNode):
         return self._count
 
     def _get_index(self, x: int, y: int, z: int) -> int:
-        y_lower = y < self._center_y
-        z_lower = z < self._center_z
-        if x < self._center_x:
-            if y_lower:
-                return ChildXnYnZn if z_lower else ChildXnYnZp
-            return ChildXnYpZn if z_lower else ChildXnYpZp
-        if y_lower:
-            return ChildXpYnZn if z_lower else ChildXpYnZp
-        return ChildXpYpZn if z_lower else ChildXpYpZp
+        return (x >= self._center_x) + (y >= self._center_y) * 2 + (z >= self._center_z) * 4
 
     def get_value(self, x: int, y: int, z: int) -> any:
         child = self.child_nodes[self._get_index(x, y, z)]
@@ -1161,9 +1153,10 @@ class GreedyMeshing:
                   axis_index: int, quads: List[Quad]):
         axis1_index = {0: 1, 1: 2, 2: 0}[axis_index]
         axis2_index = {0: 2, 1: 0, 2: 1}[axis_index]
-
-        def get_axis(i):
-            return {0: bounds[3] - bounds[0], 1: bounds[4] - bounds[1], 2: bounds[5] - bounds[2]}[i]
+        axis_sizes = {0: bounds[3] - bounds[0], 1: bounds[4] - bounds[1], 2: bounds[5] - bounds[2]}
+        axis_size = axis_sizes[axis_index]
+        axis1_size = axis_sizes[axis1_index]
+        axis2_size = axis_sizes[axis2_index]
 
         get_vector = GreedyMeshing.get_vector_func(bounds, axis_index, axis1_index, axis2_index)
         normals: List[Tuple[float, float, float]] = [
@@ -1179,15 +1172,15 @@ class GreedyMeshing:
             )
         ]
         normal_offsets = [-1, 1]
-        for a in range(0, get_axis(axis_index)):
-            has_offset = [a > 0, a < get_axis(axis_index) - 1]
+        for a in range(0, axis_size):
+            has_offset = [a > 0, a < axis_size - 1]
             visited = [
-                [False] * get_axis(axis1_index) * get_axis(axis2_index),
-                [False] * get_axis(axis1_index) * get_axis(axis2_index)
+                [False] * axis1_size * axis2_size,
+                [False] * axis1_size * axis2_size
             ]
-            for b in range(0, get_axis(axis1_index)):
-                for c in range(0, get_axis(axis2_index)):
-                    visited_start_index = b * get_axis(axis2_index) + c
+            for b in range(0, axis1_size):
+                for c in range(0, axis2_size):
+                    visited_start_index = b * axis2_size + c
                     start_voxel = voxels.get_value(*get_vector(a, b, c))
                     if start_voxel is None:
                         visited[0][visited_start_index] = True
@@ -1204,8 +1197,8 @@ class GreedyMeshing:
                                 # Move first axis until end or voxel mismatch
                                 end_index_axis1 = b
                                 found_end_axis1 = False
-                                for i in range(b + 1, get_axis(axis1_index)):
-                                    iter_visited_index = i * get_axis(axis2_index) + c
+                                for i in range(b + 1, axis1_size):
+                                    iter_visited_index = i * axis2_size + c
                                     iter_voxel = voxels.get_value(*get_vector(a, i, c))
                                     if (
                                             # No voxel found...
@@ -1222,23 +1215,22 @@ class GreedyMeshing:
                                         found_end_axis1 = True
                                         break
                                 if not found_end_axis1:
-                                    end_index_axis1 = get_axis(axis1_index) - 1
+                                    end_index_axis1 = axis1_size - 1
                                 # Move second axis until end or voxel row mismatch
                                 end_index_axis2 = c
                                 found_end_axis2 = False
-                                for j in range(c + 1, get_axis(axis2_index)):
+                                for j in range(c + 1, axis2_size):
                                     any_mismatch_in_row = False
                                     for i in range(b, end_index_axis1 + 1):
-                                        iter_visited_index = i * get_axis(axis2_index) + j
+                                        iter_visited_index = i * axis2_size + j
                                         iter_voxel = voxels.get_value(*get_vector(a, i, j))
-                                        is_color_not_equal = not ignore_color and start_voxel != iter_voxel
                                         if (
                                                 # No voxel found...
                                                 iter_voxel is None or
                                                 # ...or already visited...
                                                 visited[visited_index][iter_visited_index] or
                                                 # ...or different color...
-                                                is_color_not_equal or
+                                                (not ignore_color and start_voxel != iter_voxel) or
                                                 # ... or not connected to the outside space
                                                 (has_offset[visited_index] and
                                                  not outside.get_value(*get_vector(a_back, i, j)))
@@ -1250,80 +1242,23 @@ class GreedyMeshing:
                                         found_end_axis2 = True
                                         break
                                 if not found_end_axis2:
-                                    end_index_axis2 = get_axis(axis2_index) - 1
+                                    end_index_axis2 = axis2_size - 1
                                 # Mark area as visited
                                 for i in range(b, end_index_axis1 + 1):
                                     for j in range(c, end_index_axis2 + 1):
-                                        visited[visited_index][i * get_axis(axis2_index) + j] = True
+                                        visited[visited_index][i * axis2_size + j] = True
                                 # Store quad
                                 a_visited = a if visited_index == 0 else a + 1
-                                p1 = get_vector(a_visited, b, c)
-                                p2 = get_vector(a_visited, end_index_axis1 + 1, c)
-                                p3 = get_vector(a_visited, end_index_axis1 + 1, end_index_axis2 + 1)
-                                p4 = get_vector(a_visited, b, end_index_axis2 + 1)
-                                quad = GreedyMeshing.build_quad(p1, p2, p3, p4, normals[visited_index], start_voxel)
+                                quad = Quad()
+                                quad.normal = normals[visited_index]
+                                quad.color = start_voxel
+                                quad.p1 = get_vector(a_visited, b, c)
+                                quad.p2 = (get_vector(a_visited, end_index_axis1 + 1, c) if visited_index == 0 else
+                                           get_vector(a_visited, b, end_index_axis2 + 1))
+                                quad.p3 = get_vector(a_visited, end_index_axis1 + 1, end_index_axis2 + 1)
+                                quad.p4 = (get_vector(a_visited, b, end_index_axis2 + 1) if visited_index == 0 else
+                                           get_vector(a_visited, end_index_axis1 + 1, c))
                                 quads.append(quad)
-
-    @staticmethod
-    def build_quad(p1, p2, p3, p4, normal, color) -> Quad:
-        quad = Quad()
-        quad.normal = normal
-        quad.color = color
-        if normal[0] < 0:
-            y = min(p1[1], p2[1], p3[1], p4[1])
-            yw = max(p1[1], p2[1], p3[1], p4[1])
-            z = min(p1[2], p2[2], p3[2], p4[2])
-            zh = max(p1[2], p2[2], p3[2], p4[2])
-            quad.p1 = (p1[0], yw, z)
-            quad.p2 = (p1[0], yw, zh)
-            quad.p3 = (p1[0], y, zh)
-            quad.p4 = (p1[0], y, z)
-        elif normal[0] > 0:
-            y = min(p1[1], p2[1], p3[1], p4[1])
-            yw = max(p1[1], p2[1], p3[1], p4[1])
-            z = min(p1[2], p2[2], p3[2], p4[2])
-            zh = max(p1[2], p2[2], p3[2], p4[2])
-            quad.p1 = (p1[0], y, z)
-            quad.p2 = (p1[0], y, zh)
-            quad.p3 = (p1[0], yw, zh)
-            quad.p4 = (p1[0], yw, z)
-        elif normal[1] < 0:
-            x = min(p1[0], p2[0], p3[0], p4[0])
-            xw = max(p1[0], p2[0], p3[0], p4[0])
-            z = min(p1[2], p2[2], p3[2], p4[2])
-            zh = max(p1[2], p2[2], p3[2], p4[2])
-            quad.p1 = (x, p1[1], z)
-            quad.p2 = (x, p1[1], zh)
-            quad.p3 = (xw, p1[1], zh)
-            quad.p4 = (xw, p1[1], z)
-        elif normal[1] > 0:
-            x = min(p1[0], p2[0], p3[0], p4[0])
-            xw = max(p1[0], p2[0], p3[0], p4[0])
-            z = min(p1[2], p2[2], p3[2], p4[2])
-            zh = max(p1[2], p2[2], p3[2], p4[2])
-            quad.p1 = (xw, p1[1], z)
-            quad.p2 = (xw, p1[1], zh)
-            quad.p3 = (x, p1[1], zh)
-            quad.p4 = (x, p1[1], z)
-        elif normal[2] < 0:
-            x = min(p1[0], p2[0], p3[0], p4[0])
-            xw = max(p1[0], p2[0], p3[0], p4[0])
-            y = min(p1[1], p2[1], p3[1], p4[1])
-            yh = max(p1[1], p2[1], p3[1], p4[1])
-            quad.p1 = (x, yh, p1[2])
-            quad.p2 = (x, y, p1[2])
-            quad.p3 = (xw, y, p1[2])
-            quad.p4 = (xw, yh, p1[2])
-        elif normal[2] > 0:
-            x = min(p1[0], p2[0], p3[0], p4[0])
-            xw = max(p1[0], p2[0], p3[0], p4[0])
-            y = min(p1[1], p2[1], p3[1], p4[1])
-            yh = max(p1[1], p2[1], p3[1], p4[1])
-            quad.p1 = (x, y, p1[2])
-            quad.p2 = (x, yh, p1[2])
-            quad.p3 = (xw, yh, p1[2])
-            quad.p4 = (xw, y, p1[2])
-        return quad
 
     @staticmethod
     def get_vector_func(bounds: Tuple[int, int, int, int, int, int], axis_index: int, axis1_index: int,
