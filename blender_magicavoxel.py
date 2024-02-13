@@ -1778,12 +1778,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         while voxel_iterator.move_next():
                             (x, y, z, value) = voxel_iterator.current
                             target_position = world_matrix @ mathutils.Vector((
-                                x - math.floor(mesh.grid.width * 0.5),
-                                y - math.floor(mesh.grid.height * 0.5),
-                                z - math.floor(mesh.grid.depth * 0.5)
+                                x + 0.5 - math.floor(mesh.grid.width * 0.5),
+                                y + 0.5 - math.floor(mesh.grid.depth * 0.5),
+                                z + 0.5 - math.floor(mesh.grid.height * 0.5)
                             ))
-                            combined_mesh.voxels.add(int(target_position[0]), int(target_position[1]),
-                                                     int(target_position[2]), value)
+                            combined_mesh.voxels.add(int(target_position[0] - 0.5), int(target_position[1] - 0.5),
+                                                     int(target_position[2] - 0.5), value)
                 bounds = combined_mesh.voxels.not_empty_bounds
                 combined_mesh.width = bounds[3] - bounds[0]
                 combined_mesh.height = bounds[4] - bounds[1]
@@ -2201,7 +2201,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 for i in range(len(path) - 1, 0, -1):
                     next_node = nodes[path[i]]
                     if next_node.type == 'TRN':
-                        translation = next_node.get_transform_translation(mesh_frame, self.voxel_size)
+                        translation = next_node.get_transform_translation(mesh_frame, 1)
                         rotation = next_node.get_transform_rotation(mesh_frame)
                         matrix_world = translation @ rotation @ matrix_world
                 if model_id not in result:
@@ -2211,6 +2211,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             self.get_model_world_transforms_recursive(nodes, nodes[child_id], path + [node.node_id], result)
 
     def get_vertex_pos(self, p: Tuple[float, float, float], grid: VoxelGrid) -> Tuple[float, float, float]:
+        if self.join_models:
+            return p[0] * self.voxel_size, p[1] * self.voxel_size, p[2] * self.voxel_size
         return (
             (p[0] - math.floor(grid.width * 0.5)) * self.voxel_size,
             (p[1] - math.floor(grid.depth * 0.5)) * self.voxel_size,
@@ -2466,7 +2468,7 @@ class VOX_PT_import_geometry(bpy.types.Panel):
             row.prop(operator, "import_hierarchy")
         else:
             layout.prop(operator, "import_hierarchy")
-        # layout.prop(operator, "join_models")
+        layout.prop(operator, "join_models")
 
         layout.prop(operator, "voxel_size")
         layout.row().prop(operator, "meshing_type")

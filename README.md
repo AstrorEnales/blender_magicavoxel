@@ -43,6 +43,11 @@ and applied to each model and no hierarchy parent structure is created.
 
 ![](img/hierarchy.png)
 
+### Join Models
+
+This option allows all models in the MagicaVoxel file to be merged into one. Joining is done on a voxel basis and before
+meshing which is superior to just combining the blender meshes for generating the voxel hull and greedy meshing.
+
 ### Voxel Size
 
 The voxel size parameter can be used to define the unit voxel size. The example below shows a voxel model imported with
@@ -142,7 +147,7 @@ and [here](https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/).
 | Textures with UV unwrap | ✅                                                                                     | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
 |                  Camera | WIP [[#3]](https://github.com/AstrorEnales/blender_magicavoxel/issues/3)              | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
 |    Rendering Properties | WIP [[#4]](https://github.com/AstrorEnales/blender_magicavoxel/issues/4)              | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
-|             Join Models | WIP [[#2]](https://github.com/AstrorEnales/blender_magicavoxel/issues/2)              | ❌                                                                                                | ✅                                                                                               | ❌                                                                               |
+|             Join Models | ✅                                                                                     | ❌                                                                                                | ✅                                                                                               | ❌                                                                               |
 |             Voxel Scale | ✅                                                                                     | ✅                                                                                                | ✅                                                                                               | ❌                                                                               |
 |    Custom Meshing Types | ✅                                                                                     | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
 |    Reduce To Voxel Hull | ✅                                                                                     | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
