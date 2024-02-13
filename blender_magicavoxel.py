@@ -332,8 +332,7 @@ class Octree:
 
     @property
     def not_empty_bounds(self) -> Tuple[int, int, int, int, int, int]:
-        return (0, 0, 0, 1, 1, 1) if self._root.is_empty else \
-            (self._root.min_x, self._root.min_y, self._root.min_z, self._root.max_x, self._root.max_y, self._root.max_z)
+        return self._root.not_empty_bounds
 
     def get_value(self, x: int, y: int, z: int) -> any:
         return self.default_value if self.is_outside(x, y, z) else self._root.get_value(x, y, z)
@@ -544,6 +543,11 @@ class OctreeNode:
         self.min_x = -1
         self.min_y = -1
         self.min_z = -1
+
+    @property
+    def not_empty_bounds(self) -> Tuple[int, int, int, int, int, int]:
+        return (0, 0, 0, 1, 1, 1) if self.is_empty else \
+            (self.min_x, self.min_y, self.min_z, self.max_x, self.max_y, self.max_z)
 
     @property
     def is_leaf(self) -> bool:
@@ -950,14 +954,11 @@ class VoxelGrid:
         timer_start = time.time()
         outside = Octree(default_value=True)
         if voxels.is_not_empty:
-            bounds = voxels.not_empty_bounds
-            bounds = (bounds[0] - 1, bounds[1] - 1, bounds[2] - 1, bounds[3] + 1, bounds[4] + 1, bounds[5] + 1)
-            distinct_areas = VoxelGrid.find_distinct_areas(voxels, bounds)
-            outside_label = distinct_areas.get_value(bounds[0], bounds[1], bounds[2])
+            distinct_areas = VoxelGrid.find_distinct_areas(voxels)
             distinct_areas_iterator = OctreeIterator(distinct_areas)
             while distinct_areas_iterator.move_next():
                 (x, y, z, _) = distinct_areas_iterator.current
-                if distinct_areas.get_value(x, y, z) != outside_label:
+                if distinct_areas.get_value(x, y, z) != 0:
                     outside.add(x, y, z, False)
         timer_end = time.time()
         if DEBUG_OUTPUT:
@@ -965,7 +966,7 @@ class VoxelGrid:
         return outside
 
     @staticmethod
-    def find_distinct_areas(voxels: Octree, bounds: Tuple[int, int, int, int, int, int]) -> Octree:
+    def find_distinct_areas(voxels: Octree) -> Octree:
         """
         connected-component labeling (CCL) with the Hoshen–Kopelman algorithm
         modified to label all voxels -1 as we're only interested in non-voxel labels
@@ -976,47 +977,51 @@ class VoxelGrid:
         labels = Octree(voxels.size, default_value=0)
         label_equivalence: Dict[int, Set[int]] = {0: set()}
         next_label = 1
-        for z in range(bounds[2], bounds[5]):
-            for y in range(bounds[1], bounds[4]):
-                for x in range(bounds[0], bounds[3]):
-                    if voxels.get_value(x, y, z) is None:
-                        possible_labels: Set[int] = set()
-                        if voxels.get_value(x - 1, y, z) is None:
-                            possible_labels.add(labels.get_value(x - 1, y, z))
-                        if voxels.get_value(x, y - 1, z) is None:
-                            possible_labels.add(labels.get_value(x, y - 1, z))
-                        if voxels.get_value(x, y, z - 1) is None:
-                            possible_labels.add(labels.get_value(x, y, z - 1))
-                        if len(possible_labels) == 0:
-                            labels.add(x, y, z, next_label)
-                            label_equivalence[next_label] = set()
-                            next_label += 1
-                        elif len(possible_labels) == 1:
-                            labels.add(x, y, z, next(iter(possible_labels)))
-                        elif len(possible_labels) == 2:
-                            min_label = min(possible_labels)
-                            if min_label > 0:
-                                labels.add(x, y, z, min_label)
-                            tmp = list(possible_labels)
-                            if tmp[0] != tmp[1]:
-                                label_equivalence[tmp[0]].add(tmp[1])
-                                label_equivalence[tmp[1]].add(tmp[0])
+        leafs = sorted([leaf for leaf in voxels.leafs if not leaf.is_empty],
+                       key=lambda l: (l.start_position_z, l.start_position_y, l.start_position_x))
+        for leaf in leafs:
+            bounds = leaf.not_empty_bounds
+            for z in range(bounds[2] - 1, bounds[5] + 1):
+                for y in range(bounds[1] - 1, bounds[4] + 1):
+                    for x in range(bounds[0] - 1, bounds[3] + 1):
+                        if voxels.get_value(x, y, z) is None:
+                            possible_labels: Set[int] = set()
+                            if voxels.get_value(x - 1, y, z) is None:
+                                possible_labels.add(labels.get_value(x - 1, y, z))
+                            if voxels.get_value(x, y - 1, z) is None:
+                                possible_labels.add(labels.get_value(x, y - 1, z))
+                            if voxels.get_value(x, y, z - 1) is None:
+                                possible_labels.add(labels.get_value(x, y, z - 1))
+                            if len(possible_labels) == 0:
+                                labels.add(x, y, z, next_label)
+                                label_equivalence[next_label] = set()
+                                next_label += 1
+                            elif len(possible_labels) == 1:
+                                labels.add(x, y, z, next(iter(possible_labels)))
+                            elif len(possible_labels) == 2:
+                                min_label = min(possible_labels)
+                                if min_label > 0:
+                                    labels.add(x, y, z, min_label)
+                                tmp = list(possible_labels)
+                                if tmp[0] != tmp[1]:
+                                    label_equivalence[tmp[0]].add(tmp[1])
+                                    label_equivalence[tmp[1]].add(tmp[0])
+                            else:
+                                min_label = min(possible_labels)
+                                if min_label > 0:
+                                    labels.add(x, y, z, min_label)
+                                tmp = list(possible_labels)
+                                if tmp[0] != tmp[1]:
+                                    label_equivalence[tmp[0]].add(tmp[1])
+                                    label_equivalence[tmp[1]].add(tmp[0])
+                                if tmp[0] != tmp[2]:
+                                    label_equivalence[tmp[0]].add(tmp[2])
+                                    label_equivalence[tmp[2]].add(tmp[0])
+                                if tmp[1] != tmp[2]:
+                                    label_equivalence[tmp[1]].add(tmp[2])
+                                    label_equivalence[tmp[2]].add(tmp[1])
                         else:
-                            min_label = min(possible_labels)
-                            if min_label > 0:
-                                labels.add(x, y, z, min_label)
-                            tmp = list(possible_labels)
-                            if tmp[0] != tmp[1]:
-                                label_equivalence[tmp[0]].add(tmp[1])
-                                label_equivalence[tmp[1]].add(tmp[0])
-                            if tmp[0] != tmp[2]:
-                                label_equivalence[tmp[0]].add(tmp[2])
-                                label_equivalence[tmp[2]].add(tmp[0])
-                            if tmp[1] != tmp[2]:
-                                label_equivalence[tmp[1]].add(tmp[2])
-                                label_equivalence[tmp[2]].add(tmp[1])
-                    else:
-                        labels.add(x, y, z, -1)
+                            labels.add(x, y, z, -1)
         # Collapse all overlapping sets until nothing changes anymore
         count = 0
         while count != len(label_equivalence):
