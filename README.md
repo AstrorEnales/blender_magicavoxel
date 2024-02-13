@@ -1,6 +1,7 @@
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/AstrorEnales/blender_magicavoxel?style=flat-square)
-![GitHub](https://img.shields.io/github/license/AstrorEnales/blender_magicavoxel?style=flat-square)
-![GitHub all releases](https://img.shields.io/github/downloads/AstrorEnales/blender_magicavoxel/total?style=flat-square)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/AstrorEnales/blender_magicavoxel?style=flat-square)](https://github.com/AstrorEnales/blender_magicavoxel/releases/latest)
+![GitHub](https://img.shields.io/github/license/AstrorEnales/blender_magicavoxel?style=flat-square&color=red)
+![GitHub all releases](https://img.shields.io/github/downloads/AstrorEnales/blender_magicavoxel/total?style=flat-square&color=forestgreen)
+[![Discord](https://img.shields.io/badge/discord-join-blue?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/vnKd9DT35Z)
 
 # blender_magicavoxel
 
@@ -140,7 +141,7 @@ and [here](https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/).
 
 |                         | This                                                                                  | [technistguru/<br>MagicaVoxel_Importer](https://github.com/technistguru/MagicaVoxel_Importer)    | [RichysHub/<br>MagicaVoxel-VOX-importer](https://github.com/RichysHub/MagicaVoxel-VOX-importer) | [ldo/<br>blender_magivox_import](https://github.com/ldo/blender_magivox_import) |
 |------------------------:|---------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
-|                  Active | ✅                                                                                     | ❌ [[ref]](https://github.com/technistguru/MagicaVoxel_Importer/issues/2#issuecomment-1020678306) | Last update 29.10.2019                                                                          | Last update 06.07.2021                                                          |
+|                  Active | ✅                                                                                     | ❌ [[ref]](https://github.com/technistguru/MagicaVoxel_Importer/issues/2#issuecomment-1020678306) | ~                                                                                               | Last update 06.07.2021                                                          |
 |   Supported VOX version | 150, 200                                                                              | 150                                                                                              | 150                                                                                             | 150                                                                             |
 |               Hierarchy | ✅                                                                                     | ✅                                                                                                | ❌                                                                                               | ❌                                                                               |
 |                Material | WIP (MATT, MATL) [[#1]](https://github.com/AstrorEnales/blender_magicavoxel/issues/1) | ✅ (MATL)                                                                                         | ~ (MATT)                                                                                        | ~ (MATT)                                                                        |

@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.5.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.0)
+
+  * **[feature]** Speedup greedy meshing
+  * **[feature]** Add join models option to create a single mesh
+
 ## [v1.4.3](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.4.3)
 
   * **[fix]** Fix missing voxels regression after introducing octrees
