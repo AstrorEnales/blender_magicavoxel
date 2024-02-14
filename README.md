@@ -2,11 +2,14 @@
 ![GitHub](https://img.shields.io/github/license/AstrorEnales/blender_magicavoxel?style=flat-square&color=red)
 ![GitHub all releases](https://img.shields.io/github/downloads/AstrorEnales/blender_magicavoxel/total?style=flat-square&color=forestgreen)
 [![Discord](https://img.shields.io/badge/discord-join-blue?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/vnKd9DT35Z)
+[![itch.io](https://img.shields.io/badge/support_on_itch.io-grey?style=flat-square&logo=itch.io&logoColor=FF2449)](https://astralcrowgames.itch.io/blender-magicavoxel-addon)
 
 # blender_magicavoxel
 
 Addon for the [Blender](https://www.blender.org) 3D modeling software for
 loading [MagicaVoxel](https://ephtracy.github.io) VOX files.
+
+If you enjoy the addon and want to support the maintenance and future development feel free to chip in on [itch.io](https://astralcrowgames.itch.io/blender-magicavoxel-addon).
 
 ## 💾 Download
 
