@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.5.2](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.2)
+
+  * **[fix]** Fix CCL optimization
+
 ## [v1.5.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.0)
 
   * **[feature]** Speedup greedy meshing
