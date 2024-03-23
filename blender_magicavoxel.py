@@ -1859,6 +1859,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         ]
                         new_mesh.from_pydata(vertices, [], faces)
                         new_mesh.update()
+                        uv_layer = new_mesh.uv_layers.new(name="UVMap")
                         if self.material_mode == "VERTEX_COLOR":
                             new_mesh.materials.append(materials[0])
                             new_mesh.vertex_colors.new()
@@ -1876,7 +1877,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     vertex_colors_mat[i].color = mat_color
                         elif self.material_mode == "MAT_AS_TEX":
                             new_mesh.materials.append(materials[0])
-                            uv_layer = new_mesh.uv_layers.new(name="UVMap")
                             # Color index as pixel x position + 0.5 offset for the center of the pixel
                             uv_x = (color_index + 0.5) / 256.0
                             for i in range(len(faces) * 4):
@@ -1925,6 +1925,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     new_mesh = bpy.data.meshes.new("mesh_%s" % mesh_index)
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
+                    uv_layer = new_mesh.uv_layers.new(name="UVMap")
                     timer_end = time.time()
                     if DEBUG_OUTPUT:
                         print('[DEBUG] took %s sec' % (timer_end - timer_start))
@@ -1957,7 +1958,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                 vertex_colors_mat[vertex_offset + 2].color = mat_color
                                 vertex_colors_mat[vertex_offset + 3].color = mat_color
                     elif self.material_mode == "MAT_AS_TEX":
-                        uv_layer = new_mesh.uv_layers.new(name="UVMap")
                         for i in range(len(quads)):
                             vertex_offset = i * 4
                             # Color index as pixel x position + 0.5 offset for the center of the pixel
@@ -1998,7 +1998,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         emission_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
                         uv_x_step = 1.0 / packer.actual_packing_area_width
                         uv_y_step = 1.0 / packer.actual_packing_area_height
-                        uv_layer = new_mesh.uv_layers.new(name="UVMap")
                         for i in range(len(quads)):
                             quad = quads[i]
                             quad_placement = quad_placements[i]
