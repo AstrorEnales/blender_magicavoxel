@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.5.3](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.3)
+
+  * **[change]** #10 Always add mesh UV layers to prevent lighting issues when exporting to obj and importing in Godot
+
 ## [v1.5.2](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.2)
 
   * **[fix]** Fix CCL optimization
