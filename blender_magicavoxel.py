@@ -624,8 +624,8 @@ class OctreeBranchNode(OctreeNode):
             pos_y = self.start_position_y if y < self._center_y else self._center_y
             pos_z = self.start_position_z if z < self._center_z else self._center_z
             node = (
-                OctreeBranchNode(self.parent, pos_x, pos_y, pos_z, self.size >> 1, self.default_value)
-                if self.size > SideLength else
+                OctreeBranchNode(self.parent, pos_x, pos_y, pos_z, self.size_half, self.default_value)
+                if self.size_half > SideLength else
                 OctreeLeafNode(self.parent, pos_x, pos_y, pos_z, self.default_value)
             )
             self.child_nodes[node_index] = node
@@ -943,9 +943,8 @@ class VoxelGrid:
                 continue
             # If not connected to the outside space, delete the voxel(inside hull)
             voxels.remove(x, y, z)
-        timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (time.time() - timer_start))
 
     @staticmethod
     def create_outside_grid(voxels: Octree) -> Octree:
@@ -960,9 +959,8 @@ class VoxelGrid:
                 (x, y, z, _) = distinct_areas_iterator.current
                 if distinct_areas.get_value(x, y, z) != 0:
                     outside.add(x, y, z, False)
-        timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return outside
 
     @staticmethod
@@ -1066,9 +1064,8 @@ class VoxelGrid:
                     labels.add(iterator.current[0], iterator.current[1], iterator.current[2], value)
                 else:
                     labels.remove(iterator.current[0], iterator.current[1], iterator.current[2])
-        timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return labels
 
 
@@ -1145,9 +1142,8 @@ class SimpleQuadsMeshing:
             if outside.get_value(x, y, z + 1):
                 quads.append(Quad((x, y, z + 1), (x, y + 1, z + 1), (x + 1, y + 1, z + 1), (x + 1, y, z + 1), (0, 0, 1),
                                   color_index))
-        timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return quads
 
 
@@ -1162,9 +1158,8 @@ class GreedyMeshing:
         GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 0, quads)
         GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 1, quads)
         GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 2, quads)
-        timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return quads
 
     @staticmethod
@@ -1468,6 +1463,10 @@ class VoxModel:
         color = self.color_palette[color_index]
         return color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3] / 255.0
 
+    def is_layer_hidden(self, layer_id: int):
+        return layer_id in self.layers and '_hidden' in self.layers[layer_id] and \
+            self.layers[layer_id]['_hidden'] == '1'
+
 
 def voxels_as_cubes_on_update(self, _context):
     if self.convert_to_mesh is self.voxels_as_cubes:
@@ -1714,9 +1713,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             print('[DEBUG] load raw data')
         timer_start = time.time()
         result = self.load_vox(filepath)
-        timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (timer_end - timer_start))
+            print('[DEBUG] took %s sec' % (time.time() - timer_start))
         if result is not None:
             collection_name = os.path.basename(filepath)
             view_layer = context.view_layer
@@ -1926,9 +1924,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
                     uv_layer = new_mesh.uv_layers.new(name="UVMap")
-                    timer_end = time.time()
                     if DEBUG_OUTPUT:
-                        print('[DEBUG] took %s sec' % (timer_end - timer_start))
+                        print('[DEBUG] took %s sec' % (time.time() - timer_start))
                     if DEBUG_OUTPUT:
                         print('[DEBUG] assign material data')
                     timer_start = time.time()
@@ -1988,7 +1985,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                          min(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
                             quad_pack_successful, quad_placement = packer.try_pack(width, height)
                             if not quad_pack_successful:
-                                self.report({"WARNING"}, "File is not in VOX format")
+                                self.report({"WARNING"}, "Failed to unwrap all mesh faces onto texture")
                                 return {"CANCELLED"}
                             quad_placements.append((quad_placement[0], quad_placement[1], width, height))
                         pixel_size = packer.actual_packing_area_width * packer.actual_packing_area_height
@@ -2114,9 +2111,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             face.material_index = color_index_material_map[quads[i].color]
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
                     generated_mesh_models.append(new_object)
-                    timer_end = time.time()
                     if DEBUG_OUTPUT:
-                        print('[DEBUG] took %s sec' % (timer_end - timer_start))
+                        print('[DEBUG] took %s sec' % (time.time() - timer_start))
                 model_id_object_lookup[mesh_index] = generated_mesh_models
 
             if DEBUG_OUTPUT:
@@ -2135,13 +2131,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 for model_objects in model_id_object_lookup.values():
                     for model_object in model_objects:
                         bpy.data.objects.remove(model_object)
-            timer_end = time.time()
             if DEBUG_OUTPUT:
-                print('[DEBUG] took %s sec' % (timer_end - timer_start))
+                print('[DEBUG] took %s sec' % (time.time() - timer_start))
 
-        total_timer_end = time.time()
         if DEBUG_OUTPUT:
-            print('[DEBUG] total time %s sec' % (total_timer_end - total_timer_start))
+            print('[DEBUG] total time %s sec' % (time.time() - total_timer_start))
         return {"CANCELLED"} if result is None else {'FINISHED'}
 
     def get_or_create_vertex(self, vertices_map: Dict[Tuple[int, int, int], int],
