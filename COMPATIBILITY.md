@@ -35,12 +35,14 @@
 
 This table only lists versions of Blender with bundled Python 3+
 
-> Newest compatible tested version: 4.0.2
+> Newest compatible tested version: 4.1.1
 
 > Oldest compatible tested version: 2.80
 
 | Blender Version | Python Version |     Status     |
 |----------------:|---------------:|:--------------:|
+|           4.1.1 |        3.11.07 |       ✅        |
+|           4.1.0 |        3.11.07 |       ✅        |
 |           4.0.2 |        3.10.13 |       ✅        |
 |           4.0.1 |        3.10.13 | not tested yet |
 |           4.0.0 |        3.10.13 | not tested yet |
