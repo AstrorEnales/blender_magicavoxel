@@ -1480,6 +1480,209 @@ def convert_to_mesh_on_update(self, _context):
         self.voxel_hull = True
 
 
+class ShaderNodeProxy:
+    @staticmethod
+    def get_node_input_key(node, key, alternatives=None):
+        translated_key = bpy.app.translations.pgettext(key)
+        if translated_key in node.inputs:
+            return translated_key
+        if key in node.inputs:
+            return key
+        if alternatives is not None:
+            for alternative in alternatives:
+                translated_key = bpy.app.translations.pgettext(alternative)
+                if translated_key in node.inputs:
+                    return translated_key
+                if alternative in node.inputs:
+                    return alternative
+        print("[WARN] Failed to find shader node input key '%s' or any alternative %s" % (key, alternatives))
+        return None
+
+    @staticmethod
+    def get_node_output_key(node, key, alternatives=None):
+        translated_key = bpy.app.translations.pgettext(key)
+        if translated_key in node.outputs:
+            return translated_key
+        if key in node.outputs:
+            return key
+        if alternatives is not None:
+            for alternative in alternatives:
+                translated_key = bpy.app.translations.pgettext(alternative)
+                if translated_key in node.outputs:
+                    return translated_key
+                if alternative in node.outputs:
+                    return alternative
+        print("[WARN] Failed to find shader node output key '%s' or any alternative %s" % (key, alternatives))
+        return None
+
+
+class SeparateColorNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        try:
+            self.node = nodes.new("ShaderNodeSeparateColor")
+            self.input_key = self.get_node_input_key(self.node, "Color")
+            self.output_red_key = self.get_node_output_key(self.node, "Red")
+            self.output_green_key = self.get_node_output_key(self.node, "Green")
+            self.output_blue_key = self.get_node_output_key(self.node, "Blue")
+        except:
+            self.node = nodes.new("ShaderNodeSeparateRGB")
+            self.input_key = self.get_node_input_key(self.node, "Image")
+            self.output_red_key = self.get_node_output_key(self.node, "R")
+            self.output_green_key = self.get_node_output_key(self.node, "G")
+            self.output_blue_key = self.get_node_output_key(self.node, "B")
+
+    def get_input(self):
+        return self.node.inputs[self.input_key]
+
+    def get_output_red(self):
+        return self.node.outputs[self.output_red_key]
+
+    def get_output_green(self):
+        return self.node.outputs[self.output_green_key]
+
+    def get_output_blue(self):
+        return self.node.outputs[self.output_blue_key]
+
+
+class VertexColorNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes, layer_name):
+        try:
+            self.node = nodes.new("ShaderNodeVertexColor")
+            self.node.layer_name = layer_name
+        except:
+            self.node = nodes.new("ShaderNodeAttribute")
+            self.node.attribute_name = layer_name
+        self.output_key = self.get_node_output_key(self.node, "Color")
+
+    def get_output(self):
+        return self.node.outputs[self.output_key]
+
+
+class TexImageNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        self.node = nodes.new("ShaderNodeTexImage")
+        self.output_key = self.get_node_output_key(self.node, "Color")
+
+    def get_output(self):
+        return self.node.outputs[self.output_key]
+
+
+class VolumeAbsorptionNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        self.node = nodes.new("ShaderNodeVolumeAbsorption")
+        self.input_color_key = self.get_node_input_key(self.node, "Color")
+        self.input_density_key = self.get_node_input_key(self.node, "Density")
+        self.output_key = self.get_node_output_key(self.node, "Volume")
+
+    def get_input_color(self):
+        return self.node.inputs[self.input_color_key]
+
+    def get_input_density(self):
+        return self.node.inputs[self.input_density_key]
+
+    def get_output(self):
+        return self.node.outputs[self.output_key]
+
+
+class VolumeScatterNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        self.node = nodes.new("ShaderNodeVolumeScatter")
+        self.input_color_key = self.get_node_input_key(self.node, "Color")
+        self.input_density_key = self.get_node_input_key(self.node, "Density")
+        self.input_anisotropy_key = self.get_node_input_key(self.node, "Anisotropy")
+        self.output_key = self.get_node_output_key(self.node, "Volume")
+
+    def get_input_color(self):
+        return self.node.inputs[self.input_color_key]
+
+    def get_input_density(self):
+        return self.node.inputs[self.input_density_key]
+
+    def get_input_anisotropy(self):
+        return self.node.inputs[self.input_anisotropy_key]
+
+    def get_output(self):
+        return self.node.outputs[self.output_key]
+
+
+class EmissionNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        self.node = nodes.new("ShaderNodeEmission")
+        self.input_color_key = self.get_node_input_key(self.node, "Color")
+        self.input_strength_key = self.get_node_input_key(self.node, "Strength")
+        self.output_key = self.get_node_output_key(self.node, "Emission")
+
+    def get_input_color(self):
+        return self.node.inputs[self.input_color_key]
+
+    def get_input_strength(self):
+        return self.node.inputs[self.input_strength_key]
+
+    def get_output(self):
+        return self.node.outputs[self.output_key]
+
+
+class MaterialOutputNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        try:
+            self.node = nodes[bpy.app.translations.pgettext("Material Output")]
+        except:
+            for node in nodes:
+                if node.bl_idname == "ShaderNodeOutputMaterial":
+                    self.node = node
+                    break
+        self.input_volume_key = self.get_node_input_key(self.node, "Volume")
+
+    def get_input_volume(self):
+        return self.node.inputs[self.input_volume_key]
+
+
+class PrincipledBSDFNodeProxy(ShaderNodeProxy):
+    def __init__(self, nodes):
+        try:
+            self.node = nodes[bpy.app.translations.pgettext("Principled BSDF")]
+        except:
+            for node in nodes:
+                if node.type == "BSDF_PRINCIPLED" or node.bl_idname == "ShaderNodeBsdfPrincipled":
+                    self.node = node
+                    break
+        self.input_roughness_key = self.get_node_input_key(self.node, "Roughness")
+        self.input_metallic_key = self.get_node_input_key(self.node, "Metallic")
+        self.input_ior_key = self.get_node_input_key(self.node, "IOR")
+        self.input_emission_strength_key = self.get_node_input_key(self.node, "Emission Strength")
+        self.input_base_color_key = self.get_node_input_key(self.node, "Base Color")
+        self.input_emission_color_key = self.get_node_input_key(self.node, "Emission Color", ["Emission"])
+        self.input_transmission_weight_key = self.get_node_input_key(self.node, "Transmission Weight", ["Transmission"])
+
+    def get_input_roughness(self):
+        return self.node.inputs[self.input_roughness_key]
+
+    def get_input_metallic(self):
+        return self.node.inputs[self.input_metallic_key]
+
+    def get_input_ior(self):
+        return self.node.inputs[self.input_ior_key]
+
+    def get_input_emission_strength(self):
+        if self.input_emission_strength_key is not None:
+            return self.node.inputs[self.input_emission_strength_key]
+        else:
+            return None
+
+    def set_input_emission_strength_default_value(self, value):
+        if self.input_emission_strength_key is not None:
+            self.node.inputs[self.input_emission_strength_key].default_value = value
+
+    def get_input_base_color(self):
+        return self.node.inputs[self.input_base_color_key]
+
+    def get_input_emission_color(self):
+        return self.node.inputs[self.input_emission_color_key]
+
+    def get_input_transmission_weight(self):
+        return self.node.inputs[self.input_transmission_weight_key]
+
+
 class ImportVOX(bpy.types.Operator, ImportHelper):
     """Load a MagicaVoxel VOX File"""
     bl_idname = "import_scene.vox"
@@ -1569,35 +1772,23 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=False,
     )
 
-    def create_vertex_color_node(self, nodes, layer_name: str):
-        try:
-            n = nodes.new("ShaderNodeVertexColor")
-            n.layer_name = layer_name
-            return n
-        except:
-            n = nodes.new("ShaderNodeAttribute")
-            n.attribute_name = layer_name
-            return n
-
     def create_materials_vertex_colors(self, collection_name: str, _: VoxModel):
         vertex_color_mat = bpy.data.materials.new(name=collection_name + " Material")
         vertex_color_mat.use_nodes = True
         nodes = vertex_color_mat.node_tree.nodes
         links = vertex_color_mat.node_tree.links
-        bdsf_node = nodes["Principled BSDF"]
-        vertex_color_node = self.create_vertex_color_node(nodes, "Col")
+        bdsf_node = PrincipledBSDFNodeProxy(nodes)
+        vertex_color_node = VertexColorNodeProxy(nodes, "Col")
         if self.import_material_props:
-            vertex_color_material_node = self.create_vertex_color_node(nodes, "Mat")
-            separate_rgb_node = nodes.new("ShaderNodeSeparateRGB")
-            links.new(vertex_color_material_node.outputs["Color"], separate_rgb_node.inputs["Image"])
-            links.new(separate_rgb_node.outputs["R"], bdsf_node.inputs["Roughness"])
-            links.new(separate_rgb_node.outputs["G"], bdsf_node.inputs["Metallic"])
-            links.new(separate_rgb_node.outputs["B"], bdsf_node.inputs["IOR"])
-            bdsf_node.inputs["Emission Strength"].default_value = 0
-            emission_color_input = (bdsf_node.inputs["Emission Color"] if "Emission Color" in bdsf_node.inputs else
-                                    bdsf_node.inputs["Emission"])
-            links.new(vertex_color_node.outputs["Color"], emission_color_input)
-        links.new(vertex_color_node.outputs["Color"], bdsf_node.inputs["Base Color"])
+            vertex_color_material_node = VertexColorNodeProxy(nodes, "Mat")
+            separate_rgb_node = SeparateColorNodeProxy(nodes)
+            links.new(vertex_color_material_node.get_output(), separate_rgb_node.get_input())
+            links.new(separate_rgb_node.get_output_red(), bdsf_node.get_input_roughness())
+            links.new(separate_rgb_node.get_output_green(), bdsf_node.get_input_metallic())
+            links.new(separate_rgb_node.get_output_blue(), bdsf_node.get_input_ior())
+            bdsf_node.set_input_emission_strength_default_value(0.0)
+            links.new(vertex_color_node.get_output(), bdsf_node.get_input_emission_color())
+        links.new(vertex_color_node.get_output(), bdsf_node.get_input_base_color())
         return [vertex_color_mat]
 
     def create_materials_per_color(self, collection_name: str, model: VoxModel,
@@ -1610,43 +1801,38 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 mat.use_nodes = True
                 nodes = mat.node_tree.nodes
                 links = mat.node_tree.links
-                bdsf_node = nodes["Principled BSDF"]
-                mat_output_node = nodes["Material Output"]
+                bdsf_node = PrincipledBSDFNodeProxy(nodes)
+                mat_output_node = MaterialOutputNodeProxy(nodes)
                 color = model.get_color(color_index)
-                bdsf_node.inputs["Base Color"].default_value = color
+                bdsf_node.get_input_base_color().default_value = color
                 if self.import_material_props:
-                    bdsf_node.inputs["Roughness"].default_value = material.roughness
-                    bdsf_node.inputs["Metallic"].default_value = material.metallic
-                    bdsf_node.inputs["IOR"].default_value = material.ior
-                    bdsf_node.inputs["Emission Strength"].default_value = 0
-                    if "Emission Color" in bdsf_node.inputs:
-                        bdsf_node.inputs["Emission Color"].default_value = color
-                    else:
-                        bdsf_node.inputs["Emission"].default_value = color
+                    bdsf_node.get_input_roughness().default_value = material.roughness
+                    bdsf_node.get_input_metallic().default_value = material.metallic
+                    bdsf_node.get_input_ior().default_value = material.ior
+                    bdsf_node.set_input_emission_strength_default_value(0.0)
+                    bdsf_node.get_input_emission_color().default_value = color
                     if material.type == VoxMaterial.TYPE_EMIT:
-                        bdsf_node.inputs["Emission Strength"].default_value = material.emission
+                        bdsf_node.set_input_emission_strength_default_value(material.emission)
                     elif material.type in [VoxMaterial.TYPE_MEDIA, VoxMaterial.TYPE_GLASS, VoxMaterial.TYPE_BLEND]:
-                        bdsf_node.inputs["Base Color"].default_value = (1, 1, 1, 1)
-                        if "Transmission Weight" in bdsf_node.inputs:
-                            bdsf_node.inputs["Transmission Weight"].default_value = 1.0
-                        else:
-                            bdsf_node.inputs["Transmission"].default_value = 1.0
+                        # bdsf_node.get_input_base_color().default_value = (1, 1, 1, 1)
+                        bdsf_node.get_input_transmission_weight().default_value = 1.0
                         if material.media_type == VoxMaterial.MEDIA_TYPE_ABSORB:
-                            absorb_node = nodes.new("ShaderNodeVolumeAbsorption")
-                            absorb_node.inputs["Color"].default_value = color
-                            absorb_node.inputs["Density"].default_value = material.density
-                            links.new(absorb_node.outputs["Volume"], mat_output_node.inputs["Volume"])
-                        elif material.media_type == VoxMaterial.MEDIA_TYPE_SCATTER:
-                            scatter_node = nodes.new("ShaderNodeVolumeScatter")
-                            scatter_node.inputs["Color"].default_value = color
-                            scatter_node.inputs["Density"].default_value = material.density
-                            scatter_node.inputs["Anisotropy"].default_value = material.phase
-                            links.new(scatter_node.outputs["Volume"], mat_output_node.inputs["Volume"])
+                            absorb_node = VolumeAbsorptionNodeProxy(nodes)
+                            absorb_node.get_input_color().default_value = color
+                            absorb_node.get_input_density().default_value = material.density
+                            links.new(absorb_node.get_output(), mat_output_node.get_input_volume())
+                        elif (material.media_type == VoxMaterial.MEDIA_TYPE_SCATTER or
+                              material.media_type == VoxMaterial.MEDIA_TYPE_SSS):  # TODO: own SSS
+                            scatter_node = VolumeScatterNodeProxy(nodes)
+                            scatter_node.get_input_color().default_value = color
+                            scatter_node.get_input_density().default_value = material.density
+                            scatter_node.get_input_anisotropy().default_value = material.phase
+                            links.new(scatter_node.get_output(), mat_output_node.get_input_volume())
                         elif material.media_type == VoxMaterial.MEDIA_TYPE_EMIT:
-                            emission_node = nodes.new("ShaderNodeEmission")
-                            emission_node.inputs["Color"].default_value = color
-                            emission_node.inputs["Strength"].default_value = material.density
-                            links.new(emission_node.outputs["Emission"], mat_output_node.inputs["Volume"])
+                            emission_node = EmissionNodeProxy(nodes)
+                            emission_node.get_input_color().default_value = color
+                            emission_node.get_input_strength().default_value = material.density
+                            links.new(emission_node.get_output(), mat_output_node.get_input_volume())
                 materials.append(mat)
         return materials
 
@@ -1663,15 +1849,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         mat.use_nodes = True
         nodes = mat.node_tree.nodes
         links = mat.node_tree.links
-        bdsf_node = nodes["Principled BSDF"]
-        color_texture_node = nodes.new("ShaderNodeTexImage")
-        color_texture_node.image = color_texture
-        links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Base Color"])
+        bdsf_node = PrincipledBSDFNodeProxy(nodes)
+        color_texture_node = TexImageNodeProxy(nodes)
+        color_texture_node.node.image = color_texture
+        color_texture_node.node.interpolation = "Closest"
+        links.new(color_texture_node.get_output(), bdsf_node.get_input_base_color())
         if self.import_material_props:
-            links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Emission"])
-            bdsf_node.inputs["Emission Strength"].default_value = 0
+            links.new(color_texture_node.get_output(), bdsf_node.get_input_emission_color())
+            bdsf_node.set_input_emission_strength_default_value(0.0)
             mat_texture = bpy.data.images.new(collection_name + " Material Texture", width=256, height=1)
-            mat_texture.colorspace_settings.name = 'Non-Color'
+            mat_texture.colorspace_settings.name = "Non-Color"
             for color_index in range(len(model.color_palette)):
                 material = model.materials[color_index]
                 pixel_index = color_index * 4
@@ -1679,13 +1866,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 mat_texture.pixels[pixel_index + 1] = material.metallic
                 mat_texture.pixels[pixel_index + 2] = material.ior
                 mat_texture.pixels[pixel_index + 3] = 1.0
-            mat_texture_node = nodes.new("ShaderNodeTexImage")
-            mat_texture_node.image = mat_texture
-            separate_rgb_node = nodes.new("ShaderNodeSeparateRGB")
-            links.new(mat_texture_node.outputs["Color"], separate_rgb_node.inputs["Image"])
-            links.new(separate_rgb_node.outputs["R"], bdsf_node.inputs["Roughness"])
-            links.new(separate_rgb_node.outputs["G"], bdsf_node.inputs["Metallic"])
-            links.new(separate_rgb_node.outputs["B"], bdsf_node.inputs["IOR"])
+            mat_texture_node = TexImageNodeProxy(nodes)
+            mat_texture_node.node.image = mat_texture
+            mat_texture_node.node.interpolation = "Closest"
+            separate_rgb_node = SeparateColorNodeProxy(nodes)
+            links.new(mat_texture_node.get_output(), separate_rgb_node.get_input())
+            links.new(separate_rgb_node.get_output_red(), bdsf_node.get_input_roughness())
+            links.new(separate_rgb_node.get_output_green(), bdsf_node.get_input_metallic())
+            links.new(separate_rgb_node.get_output_blue(), bdsf_node.get_input_ior())
         return [mat]
 
     def execute(self, context):
@@ -2016,16 +2204,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     tz = quad.p1[2] + iz
                                     for iy in range(0, width):
                                         ty = quad.p1[1] - 1 - iy if quad.normal[0] < 0 else quad.p1[1] + iy
-                                        pixel_index = (pixel_offset_iz + quad_placement[0] + iy) * 4
+                                        pindex = (pixel_offset_iz + quad_placement[0] + iy) * 4
                                         color_index = mesh.get_voxel_color_index(tx, ty, tz)
                                         color = result.get_color(color_index)
-                                        pixels[pixel_index:pixel_index + 4] = color
+                                        pixels[pindex:pindex + 4] = color
                                         color_material = result.materials[color_index]
-                                        metal_mask_pixels[pixel_index:pixel_index + 3] = [color_material.metallic] * 3
-                                        emission_mask_pixels[pixel_index:pixel_index + 3] = [
-                                                                                                color_material.emission] * 3
-                                        roughness_mask_pixels[pixel_index:pixel_index + 3] = [
-                                                                                                 color_material.roughness] * 3
+                                        metal_mask_pixels[pindex:pindex + 3] = [color_material.metallic] * 3
+                                        emission_mask_pixels[pindex:pindex + 3] = [color_material.emission] * 3
+                                        roughness_mask_pixels[pindex:pindex + 3] = [color_material.roughness] * 3
                             elif quad.normal[1] != 0:
                                 ty = quad.p1[1] if quad.normal[1] < 0 else quad.p1[1] - 1
                                 width = max(quad.p1[0], quad.p4[0]) - min(quad.p1[0], quad.p4[0])
@@ -2035,16 +2221,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     tz = quad.p1[2] + iz
                                     for ix in range(0, width):
                                         tx = quad.p1[0] + ix if quad.normal[1] < 0 else quad.p1[0] - 1 - ix
-                                        pixel_index = (pixel_offset_iz + quad_placement[0] + ix) * 4
+                                        pindex = (pixel_offset_iz + quad_placement[0] + ix) * 4
                                         color_index = mesh.get_voxel_color_index(tx, ty, tz)
                                         color = result.get_color(color_index)
-                                        pixels[pixel_index:pixel_index + 4] = color
+                                        pixels[pindex:pindex + 4] = color
                                         color_material = result.materials[color_index]
-                                        metal_mask_pixels[pixel_index:pixel_index + 3] = [color_material.metallic] * 3
-                                        emission_mask_pixels[pixel_index:pixel_index + 3] = [
-                                                                                                color_material.emission] * 3
-                                        roughness_mask_pixels[pixel_index:pixel_index + 3] = [
-                                                                                                 color_material.roughness] * 3
+                                        metal_mask_pixels[pindex:pindex + 3] = [color_material.metallic] * 3
+                                        emission_mask_pixels[pindex:pindex + 3] = [color_material.emission] * 3
+                                        roughness_mask_pixels[pindex:pindex + 3] = [color_material.roughness] * 3
                             elif quad.normal[2] != 0:
                                 tz = quad.p1[2] if quad.normal[2] < 0 else quad.p1[2] - 1
                                 width = quad.p4[0] - quad.p1[0]
@@ -2054,17 +2238,16 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     for iy in range(0, height):
                                         ty = quad.p1[1] - 1 - iy if quad.normal[2] < 0 else quad.p1[1] + iy
                                         pixel_offset_iy = (quad_placement[1] + iy) * packer.actual_packing_area_width
-                                        pixel_index = (pixel_offset_iy + quad_placement[0] + ix) * 4
+                                        pindex = (pixel_offset_iy + quad_placement[0] + ix) * 4
                                         color_index = mesh.get_voxel_color_index(tx, ty, tz)
                                         color = result.get_color(color_index)
-                                        pixels[pixel_index:pixel_index + 4] = color
+                                        pixels[pindex:pindex + 4] = color
                                         color_material = result.materials[color_index]
-                                        metal_mask_pixels[pixel_index:pixel_index + 3] = [color_material.metallic] * 3
-                                        emission_mask_pixels[pixel_index:pixel_index + 3] = [
-                                                                                                color_material.emission] * 3
-                                        roughness_mask_pixels[pixel_index:pixel_index + 3] = [
-                                                                                                 color_material.roughness] * 3
+                                        metal_mask_pixels[pindex:pindex + 3] = [color_material.metallic] * 3
+                                        emission_mask_pixels[pindex:pindex + 3] = [color_material.emission] * 3
+                                        roughness_mask_pixels[pindex:pindex + 3] = [color_material.roughness] * 3
                         # Setup model material
+                        closest_interpolation_key = "Closest"
                         color_texture = bpy.data.images.new(collection_name + " Color Texture",
                                                             width=packer.actual_packing_area_width,
                                                             height=packer.actual_packing_area_height)
@@ -2073,38 +2256,39 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         mat.use_nodes = True
                         nodes = mat.node_tree.nodes
                         links = mat.node_tree.links
-                        bdsf_node = nodes["Principled BSDF"]
-                        color_texture_node = nodes.new("ShaderNodeTexImage")
-                        color_texture_node.image = color_texture
-                        color_texture_node.interpolation = "Closest"
-                        links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Base Color"])
+                        bdsf_node = PrincipledBSDFNodeProxy(nodes)
+                        color_texture_node = TexImageNodeProxy(nodes)
+                        color_texture_node.node.image = color_texture
+                        color_texture_node.node.interpolation = closest_interpolation_key
+                        links.new(color_texture_node.get_output(), bdsf_node.get_input_base_color())
                         if self.import_material_props:
                             metal_mask_texture = bpy.data.images.new(collection_name + " Metal Mask Texture",
                                                                      width=packer.actual_packing_area_width,
                                                                      height=packer.actual_packing_area_height)
                             metal_mask_texture.pixels = metal_mask_pixels
-                            metal_mask_texture_node = nodes.new("ShaderNodeTexImage")
-                            metal_mask_texture_node.image = metal_mask_texture
-                            metal_mask_texture_node.interpolation = "Closest"
-                            links.new(metal_mask_texture_node.outputs["Color"], bdsf_node.inputs["Metallic"])
+                            metal_mask_texture_node = TexImageNodeProxy(nodes)
+                            metal_mask_texture_node.node.image = metal_mask_texture
+                            metal_mask_texture_node.node.interpolation = closest_interpolation_key
+                            links.new(metal_mask_texture_node.get_output(), bdsf_node.get_input_metallic())
                             roughness_mask_texture = bpy.data.images.new(collection_name + " Roughness Mask Texture",
                                                                          width=packer.actual_packing_area_width,
                                                                          height=packer.actual_packing_area_height)
                             roughness_mask_texture.pixels = roughness_mask_pixels
-                            roughness_mask_texture_node = nodes.new("ShaderNodeTexImage")
-                            roughness_mask_texture_node.image = roughness_mask_texture
-                            roughness_mask_texture_node.interpolation = "Closest"
-                            links.new(roughness_mask_texture_node.outputs["Color"], bdsf_node.inputs["Roughness"])
+                            roughness_mask_texture_node = TexImageNodeProxy(nodes)
+                            roughness_mask_texture_node.node.image = roughness_mask_texture
+                            roughness_mask_texture_node.node.interpolation = closest_interpolation_key
+                            links.new(roughness_mask_texture_node.get_output(), bdsf_node.get_input_roughness())
                             emission_mask_texture = bpy.data.images.new(collection_name + " Emission Mask Texture",
                                                                         width=packer.actual_packing_area_width,
                                                                         height=packer.actual_packing_area_height)
                             emission_mask_texture.pixels = emission_mask_pixels
-                            emission_mask_texture_node = nodes.new("ShaderNodeTexImage")
-                            emission_mask_texture_node.image = emission_mask_texture
-                            emission_mask_texture_node.interpolation = "Closest"
-                            links.new(emission_mask_texture_node.outputs["Color"],
-                                      bdsf_node.inputs["Emission Strength"])
-                            links.new(color_texture_node.outputs["Color"], bdsf_node.inputs["Emission"])
+                            emission_mask_texture_node = TexImageNodeProxy(nodes)
+                            emission_mask_texture_node.node.image = emission_mask_texture
+                            emission_mask_texture_node.node.interpolation = closest_interpolation_key
+                            if bdsf_node.get_input_emission_strength() is not None:
+                                links.new(emission_mask_texture_node.get_output(),
+                                          bdsf_node.get_input_emission_strength())
+                            links.new(color_texture_node.get_output(), bdsf_node.get_input_emission_color())
                         new_mesh.materials.append(mat)
                     elif self.material_mode == "MAT_PER_COLOR":
                         for i, face in enumerate(new_mesh.polygons):
