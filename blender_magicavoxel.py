@@ -1085,35 +1085,19 @@ class Quad:
         self.normal = normal
         self.color = color
 
-
-class SimpleCubesMeshing:
-    @staticmethod
-    def generate_mesh(voxels: Octree) -> List[Quad]:
-        quads: List[Quad] = []
-        iterator = OctreeIterator(voxels)
-        while iterator.move_next():
-            (x, y, z, color_index) = iterator.current
-            # Left
-            quads.append(Quad((x, y, z), (x, y + 1, z), (x, y + 1, z + 1), (x, y, z + 1), (-1, 0, 0), color_index))
-            # Right
-            quads.append(Quad((x + 1, y, z), (x + 1, y, z + 1), (x + 1, y + 1, z + 1), (x + 1, y + 1, z), (1, 0, 0),
-                              color_index))
-            # Back
-            quads.append(Quad((x, y, z), (x, y, z + 1), (x + 1, y, z + 1), (x + 1, y, z), (0, -1, 0), color_index))
-            # Front
-            quads.append(Quad((x, y + 1, z), (x + 1, y + 1, z), (x + 1, y + 1, z + 1), (x, y + 1, z + 1), (0, 1, 0),
-                              color_index))
-            # Bottom
-            quads.append(Quad((x, y, z), (x + 1, y, z), (x + 1, y + 1, z), (x, y + 1, z), (0, 0, -1), color_index))
-            # Top
-            quads.append(Quad((x, y, z + 1), (x, y + 1, z + 1), (x + 1, y + 1, z + 1), (x + 1, y, z + 1), (0, 0, 1),
-                              color_index))
-        return quads
+    def __getitem__(self, i):
+        if i == 0:
+            return self.p1
+        if i == 1:
+            return self.p2
+        if i == 2:
+            return self.p3
+        return self.p4
 
 
 class SimpleQuadsMeshing:
     @staticmethod
-    def generate_mesh(voxels: Octree, outside: Octree) -> List[Quad]:
+    def generate_mesh(voxels: Octree, outside: Octree, ignore_neighbours: bool) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] SimpleQuadsMeshing generate_mesh')
         timer_start = time.time()
@@ -1121,27 +1105,25 @@ class SimpleQuadsMeshing:
         iterator = OctreeIterator(voxels)
         while iterator.move_next():
             (x, y, z, color_index) = iterator.current
+            xn, xp, yn, yp, zn, zp = x - 1, x + 1, y - 1, y + 1, z - 1, z + 1
             # Left
-            if outside.get_value(x - 1, y, z):
-                quads.append(Quad((x, y + 1, z), (x, y + 1, z + 1), (x, y, z + 1), (x, y, z), (-1, 0, 0), color_index))
+            if ignore_neighbours or outside.get_value(xn, y, z):
+                quads.append(Quad((x, yp, z), (x, y, z), (x, y, zp), (x, yp, zp), (-1, 0, 0), color_index))
             # Right
-            if outside.get_value(x + 1, y, z):
-                quads.append(Quad((x + 1, y, z), (x + 1, y, z + 1), (x + 1, y + 1, z + 1), (x + 1, y + 1, z), (1, 0, 0),
-                                  color_index))
+            if ignore_neighbours or outside.get_value(xp, y, z):
+                quads.append(Quad((xp, y, z), (xp, yp, z), (xp, yp, zp), (xp, y, zp), (1, 0, 0), color_index))
             # Back
-            if outside.get_value(x, y - 1, z):
-                quads.append(Quad((x, y, z), (x, y, z + 1), (x + 1, y, z + 1), (x + 1, y, z), (0, -1, 0), color_index))
+            if ignore_neighbours or outside.get_value(x, yn, z):
+                quads.append(Quad((x, y, z), (xp, y, z), (xp, y, zp), (x, y, zp), (0, -1, 0), color_index))
             # Front
-            if outside.get_value(x, y + 1, z):
-                quads.append(Quad((x + 1, y + 1, z), (x + 1, y + 1, z + 1), (x, y + 1, z + 1), (x, y + 1, z), (0, 1, 0),
-                                  color_index))
+            if ignore_neighbours or outside.get_value(x, yp, z):
+                quads.append(Quad((xp, yp, z), (x, yp, z), (x, yp, zp), (xp, yp, zp), (0, 1, 0), color_index))
             # Bottom
-            if outside.get_value(x, y, z - 1):
-                quads.append(Quad((x, y + 1, z), (x, y, z), (x + 1, y, z), (x + 1, y + 1, z), (0, 0, -1), color_index))
+            if ignore_neighbours or outside.get_value(x, y, zn):
+                quads.append(Quad((x, yp, z), (xp, yp, z), (xp, y, z), (x, y, z), (0, 0, -1), color_index))
             # Top
-            if outside.get_value(x, y, z + 1):
-                quads.append(Quad((x, y, z + 1), (x, y + 1, z + 1), (x + 1, y + 1, z + 1), (x + 1, y, z + 1), (0, 0, 1),
-                                  color_index))
+            if ignore_neighbours or outside.get_value(x, y, zp):
+                quads.append(Quad((x, y, zp), (xp, y, zp), (xp, yp, zp), (x, yp, zp), (0, 0, 1), color_index))
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return quads
@@ -1266,12 +1248,12 @@ class GreedyMeshing:
                                 quad = Quad()
                                 quad.normal = normals[visited_index]
                                 quad.color = start_voxel
+                                towards1 = get_vector(a_visited, end_index_axis1 + 1, c)
+                                towards2 = get_vector(a_visited, b, end_index_axis2 + 1)
                                 quad.p1 = get_vector(a_visited, b, c)
-                                quad.p2 = (get_vector(a_visited, end_index_axis1 + 1, c) if visited_index == 0 else
-                                           get_vector(a_visited, b, end_index_axis2 + 1))
+                                quad.p2 = towards2 if visited_index == 0 else towards1
                                 quad.p3 = get_vector(a_visited, end_index_axis1 + 1, end_index_axis2 + 1)
-                                quad.p4 = (get_vector(a_visited, b, end_index_axis2 + 1) if visited_index == 0 else
-                                           get_vector(a_visited, end_index_axis1 + 1, c))
+                                quad.p4 = towards1 if visited_index == 0 else towards2
                                 quads.append(quad)
 
     @staticmethod
@@ -2086,11 +2068,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         quads = GreedyMeshing.generate_mesh(mesh.voxels, outside, ignore_color)
                     elif self.meshing_type == "SIMPLE_QUADS":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
-                        quads = SimpleQuadsMeshing.generate_mesh(mesh.voxels, outside)
+                        quads = SimpleQuadsMeshing.generate_mesh(mesh.voxels, outside, False)
                     elif self.meshing_type == "SIMPLE_CUBES":
                         if self.voxel_hull:
                             mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
-                        quads = SimpleCubesMeshing.generate_mesh(mesh.voxels)
+                        quads = SimpleQuadsMeshing.generate_mesh(mesh.voxels, outside, True)
                     else:
                         self.report({"WARNING"}, "Unknown meshing type %s" % self.meshing_type)
                         quads = []
@@ -2102,9 +2084,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     faces = [
                         [
                             self.get_or_create_vertex(vertices_map, vertices, quad.p1, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p4, mesh),
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p2, mesh),
                             self.get_or_create_vertex(vertices_map, vertices, quad.p3, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p2, mesh)
+                            self.get_or_create_vertex(vertices_map, vertices, quad.p4, mesh)
                         ]
                         for quad in quads
                     ]
@@ -2153,105 +2135,138 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             uv_layer.data[vertex_offset + 3].uv = [uv_x, 0.5]
                     elif self.material_mode == "TEXTURED_MODEL":
                         packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
-                        quad_placements: List[Tuple[int, int, int, int]] = []
+                        quad_placements: List[Tuple[int, int, int, int, Tuple[int, int, int, int]]] = []
+
+                        def max_indices(a, b, c, d):
+                            if a == b:
+                                return (0, 1) if a > c else (2, 3)
+                            if a == c:
+                                return (0, 2) if a > d else (1, 3)
+                            return (0, 3) if a > c else (1, 2)
+
+                        def min_indices(a, b, c, d):
+                            if a == b:
+                                return (0, 1) if a < c else (2, 3)
+                            if a == c:
+                                return (0, 2) if a < d else (1, 3)
+                            return (0, 3) if a < c else (1, 2)
+
+                        def determine_vertex_indices(normal_component, min_indices_x, max_indices_x, min_indices_y,
+                                                     max_indices_y):
+                            if normal_component > 0:
+                                top_left_vertex_index = (
+                                    max_indices_y[0] if max_indices_y[0] == max_indices_x[0] or max_indices_y[0] ==
+                                                        max_indices_x[1] else max_indices_y[1])
+                                top_right_vertex_index = (
+                                    max_indices_y[1] if top_left_vertex_index == max_indices_y[0] else max_indices_y[0])
+                                bottom_left_vertex_index = (
+                                    min_indices_y[0] if min_indices_y[0] == max_indices_x[0] or min_indices_y[0] ==
+                                                        max_indices_x[1] else min_indices_y[1])
+                                bottom_right_vertex_index = (
+                                    min_indices_y[1] if bottom_left_vertex_index == min_indices_y[0] else min_indices_y[
+                                        0])
+                            else:
+                                top_left_vertex_index = (
+                                    max_indices_y[0] if max_indices_y[0] == min_indices_x[0] or max_indices_y[0] ==
+                                                        min_indices_x[1] else max_indices_y[1])
+                                top_right_vertex_index = (
+                                    max_indices_y[1] if top_left_vertex_index == max_indices_y[0] else max_indices_y[0])
+                                bottom_left_vertex_index = (
+                                    min_indices_y[0] if min_indices_y[0] == min_indices_x[0] or min_indices_y[0] ==
+                                                        min_indices_x[1] else min_indices_y[1])
+                                bottom_right_vertex_index = (
+                                    min_indices_y[1] if bottom_left_vertex_index == min_indices_y[0] else min_indices_y[
+                                        0])
+                            return (top_left_vertex_index, top_right_vertex_index, bottom_left_vertex_index,
+                                    bottom_right_vertex_index)
+
                         for i in range(len(quads)):
                             quad = quads[i]
+                            max_indices_x = max_indices(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
+                            min_indices_x = min_indices(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
+                            max_indices_y = max_indices(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
+                            min_indices_y = min_indices(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
+                            max_indices_z = max_indices(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
+                            min_indices_z = min_indices(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
                             if quad.normal[0] != 0:
-                                width = max(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1]) - \
-                                        min(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
-                                height = max(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2]) - \
-                                         min(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
+                                width = quad[max_indices_y[0]][1] - quad[min_indices_y[0]][1]
+                                height = quad[max_indices_z[0]][2] - quad[min_indices_z[0]][2]
+                                max_indices_y, min_indices_y = min_indices_y, max_indices_y
+                                vertex_indices = determine_vertex_indices(quad.normal[0], min_indices_y, max_indices_y,
+                                                                          min_indices_z, max_indices_z)
                             elif quad.normal[1] != 0:
-                                width = max(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0]) - \
-                                        min(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
-                                height = max(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2]) - \
-                                         min(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
+                                width = quad[max_indices_x[0]][0] - quad[min_indices_x[0]][0]
+                                height = quad[max_indices_z[0]][2] - quad[min_indices_z[0]][2]
+                                vertex_indices = determine_vertex_indices(quad.normal[1], min_indices_x, max_indices_x,
+                                                                          min_indices_z, max_indices_z)
                             else:
-                                width = max(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0]) - \
-                                        min(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
-                                height = max(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1]) - \
-                                         min(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
+                                width = quad[max_indices_x[0]][0] - quad[min_indices_x[0]][0]
+                                height = quad[max_indices_y[0]][1] - quad[min_indices_y[0]][1]
+                                vertex_indices = determine_vertex_indices(quad.normal[2], max_indices_x, min_indices_x,
+                                                                          min_indices_y, max_indices_y)
                             quad_pack_successful, quad_placement = packer.try_pack(width, height)
                             if not quad_pack_successful:
                                 self.report({"WARNING"}, "Failed to unwrap all mesh faces onto texture")
                                 return {"CANCELLED"}
-                            quad_placements.append((quad_placement[0], quad_placement[1], width, height))
+                            quad_placements.append(
+                                (quad_placement[0], quad_placement[1], width, height, vertex_indices))
                         pixel_size = packer.actual_packing_area_width * packer.actual_packing_area_height
-                        pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
-                        metal_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
-                        roughness_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
-                        emission_mask_pixels = [0.0, 0.0, 0.0, 1.0] * pixel_size
+                        texture_pixels = [
+                            [0.0, 0.0, 0.0, 1.0] * pixel_size
+                        ]
+                        if self.import_material_props:
+                            texture_pixels.append([0.0, 0.0, 0.0, 1.0] * pixel_size)  # metal
+                            texture_pixels.append([0.0, 0.0, 0.0, 1.0] * pixel_size)  # roughness
+                            texture_pixels.append([0.0, 0.0, 0.0, 1.0] * pixel_size)  # emission
                         uv_x_step = 1.0 / packer.actual_packing_area_width
                         uv_y_step = 1.0 / packer.actual_packing_area_height
                         for i in range(len(quads)):
                             quad = quads[i]
-                            quad_placement = quad_placements[i]
+                            (x, y, w, h, vertex_indices) = quad_placements[i]
                             vertex_offset = i * 4
-                            uv_x = quad_placement[0] * uv_x_step
-                            uv_y = quad_placement[1] * uv_y_step
-                            uv_right = (quad_placement[0] + quad_placement[2]) * uv_x_step
-                            uv_top = (quad_placement[1] + quad_placement[3]) * uv_y_step
-                            uv_layer.data[vertex_offset].uv = [uv_x, uv_y]
-                            uv_layer.data[vertex_offset + 3].uv = [uv_x, uv_top]
-                            uv_layer.data[vertex_offset + 2].uv = [uv_right, uv_top]
-                            uv_layer.data[vertex_offset + 1].uv = [uv_right, uv_y]
-                            if quad.normal[0] != 0:
-                                tx = quad.p1[0] if quad.normal[0] < 0 else quad.p1[0] - 1
-                                width = max(quad.p1[1], quad.p4[1]) - min(quad.p1[1], quad.p4[1])
-                                height = quad.p2[2] - quad.p1[2]
-                                for iz in range(0, height):
-                                    pixel_offset_iz = (quad_placement[1] + iz) * packer.actual_packing_area_width
-                                    tz = quad.p1[2] + iz
-                                    for iy in range(0, width):
-                                        ty = quad.p1[1] - 1 - iy if quad.normal[0] < 0 else quad.p1[1] + iy
-                                        pindex = (pixel_offset_iz + quad_placement[0] + iy) * 4
-                                        color_index = mesh.get_voxel_color_index(tx, ty, tz)
-                                        color = result.get_color(color_index)
-                                        pixels[pindex:pindex + 4] = color
-                                        color_material = result.materials[color_index]
-                                        metal_mask_pixels[pindex:pindex + 3] = [color_material.metallic] * 3
-                                        emission_mask_pixels[pindex:pindex + 3] = [color_material.emission] * 3
-                                        roughness_mask_pixels[pindex:pindex + 3] = [color_material.roughness] * 3
-                            elif quad.normal[1] != 0:
-                                ty = quad.p1[1] if quad.normal[1] < 0 else quad.p1[1] - 1
-                                width = max(quad.p1[0], quad.p4[0]) - min(quad.p1[0], quad.p4[0])
-                                height = quad.p2[2] - quad.p1[2]
-                                for iz in range(0, height):
-                                    pixel_offset_iz = (quad_placement[1] + iz) * packer.actual_packing_area_width
-                                    tz = quad.p1[2] + iz
-                                    for ix in range(0, width):
-                                        tx = quad.p1[0] + ix if quad.normal[1] < 0 else quad.p1[0] - 1 - ix
-                                        pindex = (pixel_offset_iz + quad_placement[0] + ix) * 4
-                                        color_index = mesh.get_voxel_color_index(tx, ty, tz)
-                                        color = result.get_color(color_index)
-                                        pixels[pindex:pindex + 4] = color
-                                        color_material = result.materials[color_index]
-                                        metal_mask_pixels[pindex:pindex + 3] = [color_material.metallic] * 3
-                                        emission_mask_pixels[pindex:pindex + 3] = [color_material.emission] * 3
-                                        roughness_mask_pixels[pindex:pindex + 3] = [color_material.roughness] * 3
-                            elif quad.normal[2] != 0:
-                                tz = quad.p1[2] if quad.normal[2] < 0 else quad.p1[2] - 1
-                                width = quad.p4[0] - quad.p1[0]
-                                height = max(quad.p1[1], quad.p2[1]) - min(quad.p1[1], quad.p2[1])
-                                for ix in range(0, width):
-                                    tx = quad.p1[0] + ix
-                                    for iy in range(0, height):
-                                        ty = quad.p1[1] - 1 - iy if quad.normal[2] < 0 else quad.p1[1] + iy
-                                        pixel_offset_iy = (quad_placement[1] + iy) * packer.actual_packing_area_width
-                                        pindex = (pixel_offset_iy + quad_placement[0] + ix) * 4
-                                        color_index = mesh.get_voxel_color_index(tx, ty, tz)
-                                        color = result.get_color(color_index)
-                                        pixels[pindex:pindex + 4] = color
-                                        color_material = result.materials[color_index]
-                                        metal_mask_pixels[pindex:pindex + 3] = [color_material.metallic] * 3
-                                        emission_mask_pixels[pindex:pindex + 3] = [color_material.emission] * 3
-                                        roughness_mask_pixels[pindex:pindex + 3] = [color_material.roughness] * 3
+                            uv_x = x * uv_x_step
+                            uv_y = y * uv_y_step
+                            uv_right = (x + w) * uv_x_step
+                            uv_top = (y + h) * uv_y_step
+                            uv_layer.data[vertex_offset + vertex_indices[0]].uv = [uv_x, uv_top]
+                            uv_layer.data[vertex_offset + vertex_indices[1]].uv = [uv_right, uv_top]
+                            uv_layer.data[vertex_offset + vertex_indices[2]].uv = [uv_x, uv_y]
+                            uv_layer.data[vertex_offset + vertex_indices[3]].uv = [uv_right, uv_y]
+                            for iy in range(0, h):
+                                pixel_offset_iy = (y + iy) * packer.actual_packing_area_width
+                                for ix in range(0, w):
+                                    if quad.normal[0] != 0:
+                                        # y, z
+                                        vx = quad[vertex_indices[0]][0] - (0 if quad.normal[0] < 0 else 1)
+                                        vy = quad[vertex_indices[0]][1] + (ix if quad.normal[0] > 0 else -ix - 1)
+                                        vz = quad[vertex_indices[2]][2] + iy
+                                        color_index = mesh.get_voxel_color_index(vx, vy, vz)
+                                    elif quad.normal[1] != 0:
+                                        # x, z
+                                        vx = quad[vertex_indices[0]][0] + (ix if quad.normal[1] < 0 else -ix - 1)
+                                        vy = quad[vertex_indices[0]][1] - (0 if quad.normal[1] < 0 else 1)
+                                        vz = quad[vertex_indices[2]][2] + iy
+                                        color_index = mesh.get_voxel_color_index(vx, vy, vz)
+                                    else:
+                                        # x, y
+                                        vx = quad[vertex_indices[0]][0] + (ix if quad.normal[2] > 0 else -ix - 1)
+                                        vy = quad[vertex_indices[2]][1] + iy
+                                        vz = quad[vertex_indices[0]][2] - (0 if quad.normal[2] < 0 else 1)
+                                        color_index = mesh.get_voxel_color_index(vx, vy, vz)
+                                    color = result.get_color(color_index)
+                                    color_material = result.materials[color_index]
+                                    pindex = (pixel_offset_iy + x + ix) * 4
+                                    texture_pixels[0][pindex:pindex + 4] = color
+                                    if self.import_material_props:
+                                        texture_pixels[1][pindex:pindex + 4] = [color_material.metallic] * 3
+                                        texture_pixels[2][pindex:pindex + 4] = [color_material.emission] * 3
+                                        texture_pixels[3][pindex:pindex + 4] = [color_material.roughness] * 3
                         # Setup model material
                         closest_interpolation_key = "Closest"
                         color_texture = bpy.data.images.new(collection_name + " Color Texture",
                                                             width=packer.actual_packing_area_width,
                                                             height=packer.actual_packing_area_height)
-                        color_texture.pixels = pixels
+                        color_texture.pixels = texture_pixels[0]
                         mat = bpy.data.materials.new(name="mesh_%s Material" % mesh_index)
                         mat.use_nodes = True
                         nodes = mat.node_tree.nodes
@@ -2265,7 +2280,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             metal_mask_texture = bpy.data.images.new(collection_name + " Metal Mask Texture",
                                                                      width=packer.actual_packing_area_width,
                                                                      height=packer.actual_packing_area_height)
-                            metal_mask_texture.pixels = metal_mask_pixels
+                            metal_mask_texture.pixels = texture_pixels[1]
                             metal_mask_texture_node = TexImageNodeProxy(nodes)
                             metal_mask_texture_node.node.image = metal_mask_texture
                             metal_mask_texture_node.node.interpolation = closest_interpolation_key
@@ -2273,7 +2288,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             roughness_mask_texture = bpy.data.images.new(collection_name + " Roughness Mask Texture",
                                                                          width=packer.actual_packing_area_width,
                                                                          height=packer.actual_packing_area_height)
-                            roughness_mask_texture.pixels = roughness_mask_pixels
+                            roughness_mask_texture.pixels = texture_pixels[2]
                             roughness_mask_texture_node = TexImageNodeProxy(nodes)
                             roughness_mask_texture_node.node.image = roughness_mask_texture
                             roughness_mask_texture_node.node.interpolation = closest_interpolation_key
@@ -2281,7 +2296,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             emission_mask_texture = bpy.data.images.new(collection_name + " Emission Mask Texture",
                                                                         width=packer.actual_packing_area_width,
                                                                         height=packer.actual_packing_area_height)
-                            emission_mask_texture.pixels = emission_mask_pixels
+                            emission_mask_texture.pixels = texture_pixels[3]
                             emission_mask_texture_node = TexImageNodeProxy(nodes)
                             emission_mask_texture_node.node.image = emission_mask_texture
                             emission_mask_texture_node.node.interpolation = closest_interpolation_key
