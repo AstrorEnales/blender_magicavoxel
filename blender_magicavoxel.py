@@ -250,7 +250,7 @@ class RectanglePacker:
         else:
             return placement[0], top_most
 
-    def try_pack(self, rectangle_width: int, rectangle_height: int) -> Tuple[bool, Tuple[int, int]]:
+    def try_pack(self, rectangle_width: int, rectangle_height: int) -> Tuple[int, int] or None:
         """
         Tries to allocate space for a rectangle in the packing area.
         """
@@ -260,7 +260,7 @@ class RectanglePacker:
                                                     self.actual_packing_area_height)
         # No anchor could be found at which the rectangle did fit in
         if anchor_index == -1:
-            return False, (0, 0)
+            return None
         anchor = self.anchors[anchor_index]
         # Move the rectangle either to the left or to the top until it collides with a neighbouring rectangle. This is
         # done to combat the effect of lining up rectangles with gaps to the left or top of them because the anchor that
@@ -277,7 +277,7 @@ class RectanglePacker:
         self.insert_anchor((placement[0], placement[1] + rectangle_height))
         # Finally, we can add the rectangle to our packed rectangles list
         self.packed_rectangles.append((placement[0], placement[1], rectangle_width, rectangle_height))
-        return True, placement
+        return placement
 
 
 ChildXnYnZn = 0
@@ -1076,7 +1076,10 @@ class Quad:
                  p3: Tuple[int, int, int] = (0, 0, 0),
                  p4: Tuple[int, int, int] = (0, 0, 0),
                  normal: Tuple[int, int, int] = (0, 0, 0),
-                 color: int = 0
+                 color: int = 0,
+                 width: int = 1,
+                 height: int = 1,
+                 vertex_indices: Tuple[int, int, int, int] = (3, 2, 0, 1)
                  ):
         self.p1 = p1
         self.p2 = p2
@@ -1084,6 +1087,9 @@ class Quad:
         self.p4 = p4
         self.normal = normal
         self.color = color
+        self.width = width
+        self.height = height
+        self.vertex_indices = vertex_indices  # tl,tr,bl,br
 
     def __getitem__(self, i):
         if i == 0:
@@ -1108,22 +1114,22 @@ class SimpleQuadsMeshing:
             xn, xp, yn, yp, zn, zp = x - 1, x + 1, y - 1, y + 1, z - 1, z + 1
             # Left
             if ignore_neighbours or outside.get_value(xn, y, z):
-                quads.append(Quad((x, yp, z), (x, y, z), (x, y, zp), (x, yp, zp), (-1, 0, 0), color_index))
+                quads.append(Quad((x, yp, z), (x, y, z), (x, y, zp), (x, yp, zp), (-1, 0, 0), color_index, 1, 1))
             # Right
             if ignore_neighbours or outside.get_value(xp, y, z):
-                quads.append(Quad((xp, y, z), (xp, yp, z), (xp, yp, zp), (xp, y, zp), (1, 0, 0), color_index))
+                quads.append(Quad((xp, y, z), (xp, yp, z), (xp, yp, zp), (xp, y, zp), (1, 0, 0), color_index, 1, 1))
             # Back
             if ignore_neighbours or outside.get_value(x, yn, z):
-                quads.append(Quad((x, y, z), (xp, y, z), (xp, y, zp), (x, y, zp), (0, -1, 0), color_index))
+                quads.append(Quad((x, y, z), (xp, y, z), (xp, y, zp), (x, y, zp), (0, -1, 0), color_index, 1, 1))
             # Front
             if ignore_neighbours or outside.get_value(x, yp, z):
-                quads.append(Quad((xp, yp, z), (x, yp, z), (x, yp, zp), (xp, yp, zp), (0, 1, 0), color_index))
+                quads.append(Quad((xp, yp, z), (x, yp, z), (x, yp, zp), (xp, yp, zp), (0, 1, 0), color_index, 1, 1))
             # Bottom
             if ignore_neighbours or outside.get_value(x, y, zn):
-                quads.append(Quad((x, yp, z), (xp, yp, z), (xp, y, z), (x, y, z), (0, 0, -1), color_index))
+                quads.append(Quad((xp, y, z), (x, y, z), (x, yp, z), (xp, yp, z), (0, 0, -1), color_index, 1, 1))
             # Top
             if ignore_neighbours or outside.get_value(x, y, zp):
-                quads.append(Quad((x, y, zp), (xp, y, zp), (xp, yp, zp), (x, yp, zp), (0, 0, 1), color_index))
+                quads.append(Quad((x, y, zp), (xp, y, zp), (xp, yp, zp), (x, yp, zp), (0, 0, 1), color_index, 1, 1))
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return quads
@@ -1147,8 +1153,8 @@ class GreedyMeshing:
     @staticmethod
     def mesh_axis(bounds: Tuple[int, int, int, int, int, int], voxels: Octree, outside: Octree, ignore_color: bool,
                   axis_index: int, quads: List[Quad]):
-        axis1_index = {0: 1, 1: 2, 2: 0}[axis_index]
-        axis2_index = {0: 2, 1: 0, 2: 1}[axis_index]
+        axis1_index = {0: 1, 1: 0, 2: 0}[axis_index]
+        axis2_index = {0: 2, 1: 2, 2: 1}[axis_index]
         axis_sizes = {0: bounds[3] - bounds[0], 1: bounds[4] - bounds[1], 2: bounds[5] - bounds[2]}
         axis_size = axis_sizes[axis_index]
         axis1_size = axis_sizes[axis1_index]
@@ -1248,12 +1254,34 @@ class GreedyMeshing:
                                 quad = Quad()
                                 quad.normal = normals[visited_index]
                                 quad.color = start_voxel
-                                towards1 = get_vector(a_visited, end_index_axis1 + 1, c)
-                                towards2 = get_vector(a_visited, b, end_index_axis2 + 1)
-                                quad.p1 = get_vector(a_visited, b, c)
-                                quad.p2 = towards2 if visited_index == 0 else towards1
-                                quad.p3 = get_vector(a_visited, end_index_axis1 + 1, end_index_axis2 + 1)
-                                quad.p4 = towards1 if visited_index == 0 else towards2
+                                p1 = get_vector(a_visited, b, c)
+                                p2 = get_vector(a_visited, end_index_axis1 + 1, c)
+                                p3 = get_vector(a_visited, b, end_index_axis2 + 1)
+                                p4 = get_vector(a_visited, end_index_axis1 + 1, end_index_axis2 + 1)
+                                if axis_index == 1:
+                                    if visited_index == 0:
+                                        quad.p1 = p1
+                                        quad.p2 = p2
+                                        quad.p3 = p4
+                                        quad.p4 = p3
+                                    else:
+                                        quad.p1 = p2
+                                        quad.p2 = p1
+                                        quad.p3 = p3
+                                        quad.p4 = p4
+                                else:
+                                    if visited_index == 0:
+                                        quad.p1 = p2
+                                        quad.p2 = p1
+                                        quad.p3 = p3
+                                        quad.p4 = p4
+                                    else:
+                                        quad.p1 = p1
+                                        quad.p2 = p2
+                                        quad.p3 = p4
+                                        quad.p4 = p3
+                                quad.width = end_index_axis1 + 1 - b
+                                quad.height = end_index_axis2 + 1 - c
                                 quads.append(quad)
 
     @staticmethod
@@ -2135,81 +2163,15 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             uv_layer.data[vertex_offset + 3].uv = [uv_x, 0.5]
                     elif self.material_mode == "TEXTURED_MODEL":
                         packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
-                        quad_placements: List[Tuple[int, int, int, int, Tuple[int, int, int, int]]] = []
-
-                        def max_indices(a, b, c, d):
-                            if a == b:
-                                return (0, 1) if a > c else (2, 3)
-                            if a == c:
-                                return (0, 2) if a > d else (1, 3)
-                            return (0, 3) if a > c else (1, 2)
-
-                        def min_indices(a, b, c, d):
-                            if a == b:
-                                return (0, 1) if a < c else (2, 3)
-                            if a == c:
-                                return (0, 2) if a < d else (1, 3)
-                            return (0, 3) if a < c else (1, 2)
-
-                        def determine_vertex_indices(normal_component, min_indices_x, max_indices_x, min_indices_y,
-                                                     max_indices_y):
-                            if normal_component > 0:
-                                top_left_vertex_index = (
-                                    max_indices_y[0] if max_indices_y[0] == max_indices_x[0] or max_indices_y[0] ==
-                                                        max_indices_x[1] else max_indices_y[1])
-                                top_right_vertex_index = (
-                                    max_indices_y[1] if top_left_vertex_index == max_indices_y[0] else max_indices_y[0])
-                                bottom_left_vertex_index = (
-                                    min_indices_y[0] if min_indices_y[0] == max_indices_x[0] or min_indices_y[0] ==
-                                                        max_indices_x[1] else min_indices_y[1])
-                                bottom_right_vertex_index = (
-                                    min_indices_y[1] if bottom_left_vertex_index == min_indices_y[0] else min_indices_y[
-                                        0])
-                            else:
-                                top_left_vertex_index = (
-                                    max_indices_y[0] if max_indices_y[0] == min_indices_x[0] or max_indices_y[0] ==
-                                                        min_indices_x[1] else max_indices_y[1])
-                                top_right_vertex_index = (
-                                    max_indices_y[1] if top_left_vertex_index == max_indices_y[0] else max_indices_y[0])
-                                bottom_left_vertex_index = (
-                                    min_indices_y[0] if min_indices_y[0] == min_indices_x[0] or min_indices_y[0] ==
-                                                        min_indices_x[1] else min_indices_y[1])
-                                bottom_right_vertex_index = (
-                                    min_indices_y[1] if bottom_left_vertex_index == min_indices_y[0] else min_indices_y[
-                                        0])
-                            return (top_left_vertex_index, top_right_vertex_index, bottom_left_vertex_index,
-                                    bottom_right_vertex_index)
-
-                        for i in range(len(quads)):
-                            quad = quads[i]
-                            max_indices_x = max_indices(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
-                            min_indices_x = min_indices(quad.p1[0], quad.p2[0], quad.p3[0], quad.p4[0])
-                            max_indices_y = max_indices(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
-                            min_indices_y = min_indices(quad.p1[1], quad.p2[1], quad.p3[1], quad.p4[1])
-                            max_indices_z = max_indices(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
-                            min_indices_z = min_indices(quad.p1[2], quad.p2[2], quad.p3[2], quad.p4[2])
-                            if quad.normal[0] != 0:
-                                width = quad[max_indices_y[0]][1] - quad[min_indices_y[0]][1]
-                                height = quad[max_indices_z[0]][2] - quad[min_indices_z[0]][2]
-                                max_indices_y, min_indices_y = min_indices_y, max_indices_y
-                                vertex_indices = determine_vertex_indices(quad.normal[0], min_indices_y, max_indices_y,
-                                                                          min_indices_z, max_indices_z)
-                            elif quad.normal[1] != 0:
-                                width = quad[max_indices_x[0]][0] - quad[min_indices_x[0]][0]
-                                height = quad[max_indices_z[0]][2] - quad[min_indices_z[0]][2]
-                                vertex_indices = determine_vertex_indices(quad.normal[1], min_indices_x, max_indices_x,
-                                                                          min_indices_z, max_indices_z)
-                            else:
-                                width = quad[max_indices_x[0]][0] - quad[min_indices_x[0]][0]
-                                height = quad[max_indices_y[0]][1] - quad[min_indices_y[0]][1]
-                                vertex_indices = determine_vertex_indices(quad.normal[2], max_indices_x, min_indices_x,
-                                                                          min_indices_y, max_indices_y)
-                            quad_pack_successful, quad_placement = packer.try_pack(width, height)
-                            if not quad_pack_successful:
+                        quad_placements: List[Tuple[int, int]] = []
+                        if DEBUG_OUTPUT:
+                            print('[DEBUG] finding texture space for', len(quads), 'quads')
+                        for quad in quads:
+                            quad_placement = packer.try_pack(quad.width, quad.height)
+                            if quad_placement is None:
                                 self.report({"WARNING"}, "Failed to unwrap all mesh faces onto texture")
                                 return {"CANCELLED"}
-                            quad_placements.append(
-                                (quad_placement[0], quad_placement[1], width, height, vertex_indices))
+                            quad_placements.append((quad_placement[0], quad_placement[1]))
                         pixel_size = packer.actual_packing_area_width * packer.actual_packing_area_height
                         texture_pixels = [
                             [0.0, 0.0, 0.0, 1.0] * pixel_size
@@ -2222,19 +2184,20 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         uv_y_step = 1.0 / packer.actual_packing_area_height
                         for i in range(len(quads)):
                             quad = quads[i]
-                            (x, y, w, h, vertex_indices) = quad_placements[i]
+                            x, y = quad_placements[i]
+                            vertex_indices = quad.vertex_indices
                             vertex_offset = i * 4
                             uv_x = x * uv_x_step
                             uv_y = y * uv_y_step
-                            uv_right = (x + w) * uv_x_step
-                            uv_top = (y + h) * uv_y_step
+                            uv_right = (x + quad.width) * uv_x_step
+                            uv_top = (y + quad.height) * uv_y_step
                             uv_layer.data[vertex_offset + vertex_indices[0]].uv = [uv_x, uv_top]
                             uv_layer.data[vertex_offset + vertex_indices[1]].uv = [uv_right, uv_top]
                             uv_layer.data[vertex_offset + vertex_indices[2]].uv = [uv_x, uv_y]
                             uv_layer.data[vertex_offset + vertex_indices[3]].uv = [uv_right, uv_y]
-                            for iy in range(0, h):
+                            for iy in range(0, quad.height):
                                 pixel_offset_iy = (y + iy) * packer.actual_packing_area_width
-                                for ix in range(0, w):
+                                for ix in range(0, quad.width):
                                     if quad.normal[0] != 0:
                                         # y, z
                                         vx = quad[vertex_indices[0]][0] - (0 if quad.normal[0] < 0 else 1)
