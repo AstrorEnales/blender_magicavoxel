@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.5.5](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.5)
+
+  * **[fix]** #12 Fix and optimize UV unwrap mode
+
 ## [v1.5.4](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.4)
 
   * **[fix]** #11 Fix shader nodes and their inputs/outputs not being found when blender is set to a non-english language
