@@ -1,0 +1,27 @@
+schema_version = "1.0.0"
+
+id = "blender_magicavoxel"
+version = "1.5.5"
+name = "MagicaVoxel VOX format"
+tagline = "Importer addon for MagicaVoxel vox files"
+maintainer = "AstrorEnales"
+type = "add-on"
+tags = ["Import-Export"]
+blender_version_min = "4.2.0"
+license = ["SPDX:MIT"]
+website = "https://github.com/AstrorEnales/blender_magicavoxel"
+[permissions]
+files = "Import VOX from disk"
+
+[build]
+paths_exclude_pattern = [
+    "img/",
+    "__pycache__/",
+    ".idea/",
+    ".git/",
+    ".gitignore",
+    "*.md",
+    "LICENSE",
+    ".flake8",
+    "*.zip"
+]
