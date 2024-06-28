@@ -166,10 +166,10 @@ class RectanglePacker:
 
     def is_free(self, rectangle_x: int, rectangle_y: int, rectangle_width: int, rectangle_height: int,
                 tested_packing_area_width: int, tested_packing_area_height: int) -> bool:
-        leaves_packing_area = rectangle_x < 0 or \
-                              rectangle_y < 0 or \
-                              rectangle_x + rectangle_width > tested_packing_area_width or \
-                              rectangle_y + rectangle_height > tested_packing_area_height
+        leaves_packing_area = (rectangle_x < 0
+                               or rectangle_y < 0
+                               or rectangle_x + rectangle_width > tested_packing_area_width
+                               or rectangle_y + rectangle_height > tested_packing_area_height)
         if leaves_packing_area:
             return False
         # Brute-force search whether the rectangle touches any of the other rectangles already in the packing area
@@ -341,13 +341,13 @@ class Octree:
         return self.is_inside(x, y, z) and self._root.contains(x, y, z)
 
     def is_outside(self, x: int, y: int, z: int) -> bool:
-        return (x >= self.size_half or x < -self.size_half or y >= self.size_half or y < -self.size_half or
-                z >= self.size_half or z < -self.size_half)
+        return (x >= self.size_half or x < -self.size_half or y >= self.size_half or y < -self.size_half
+                or z >= self.size_half or z < -self.size_half)
 
     def is_inside(self, x: int, y: int, z: int) -> bool:
         # noinspection PyChainedComparisons
-        return (x < self.size_half and x >= -self.size_half and y < self.size_half and y >= -self.size_half and
-                z < self.size_half and z >= -self.size_half)
+        return (x < self.size_half and x >= -self.size_half and y < self.size_half and y >= -self.size_half
+                and z < self.size_half and z >= -self.size_half)
 
     def add(self, x: int, y: int, z: int, value: any):
         while self.is_outside(x, y, z):
@@ -495,11 +495,11 @@ class Octree:
         self._root = new_root
 
     def _contract(self):
-        while (self.size > 8 and
-               self._root.is_child_contractible(ChildXnYnZn, ChildXpYpZp) and
-               self._root.is_child_contractible(ChildXpYpZn, ChildXnYnZp) and
-               self._root.is_child_contractible(ChildXnYpZp, ChildXpYnZn) and
-               self._root.is_child_contractible(ChildXpYpZp, ChildXnYnZn)):
+        while (self.size > 8
+               and self._root.is_child_contractible(ChildXnYnZn, ChildXpYpZp)
+               and self._root.is_child_contractible(ChildXpYpZn, ChildXnYnZp)
+               and self._root.is_child_contractible(ChildXnYpZp, ChildXpYnZn)
+               and self._root.is_child_contractible(ChildXpYpZp, ChildXnYnZn)):
             self.size >>= 1
             self.size_half >>= 1
             new_root = OctreeBranchNode(self, -self.size_half, -self.size_half, -self.size_half, self.size,
@@ -975,7 +975,7 @@ class VoxelGrid:
         labels = Octree(voxels.size, default_value=0)
         label_equivalence: Dict[int, Set[int]] = {0: set()}
         next_label = 1
-        leaf_bounds = [l.not_empty_bounds for l in voxels.leafs if l.is_not_empty]
+        leaf_bounds = [leaf.not_empty_bounds for leaf in voxels.leafs if leaf.is_not_empty]
         leaf_bounds = [(b[0] - 1, b[1] - 1, b[2] - 1, b[3] + 1, b[4] + 1, b[5] + 1) for b in leaf_bounds]
         count = -1
         while count != len(leaf_bounds):
@@ -984,8 +984,8 @@ class VoxelGrid:
                 b1 = leaf_bounds[i]
                 for j in range(i - 1, -1, -1):
                     b2 = leaf_bounds[j]
-                    if not (b1[3] < b2[0] or b1[0] > b2[3] or b1[4] < b2[1] or b1[1] > b2[4] or b1[5] < b2[2] or
-                            b1[2] > b2[5]):
+                    if not (b1[3] < b2[0] or b1[0] > b2[3] or b1[4] < b2[1] or b1[1] > b2[4] or b1[5] < b2[2]
+                            or b1[2] > b2[5]):
                         leaf_bounds[j] = (
                             min(b1[0], b2[0]), min(b1[1], b2[1]), min(b1[2], b2[2]),
                             max(b1[3], b2[3]), max(b1[4], b2[4]), max(b1[5], b2[5])
@@ -1204,14 +1204,14 @@ class GreedyMeshing:
                                     iter_voxel = voxels.get_value(*get_vector(a, i, c))
                                     if (
                                             # No voxel found...
-                                            iter_voxel is None or
+                                            iter_voxel is None
                                             # ...or already visited...
-                                            visited[visited_index][iter_visited_index] or
+                                            or visited[visited_index][iter_visited_index]
                                             # ...or different color...
-                                            (not ignore_color and start_voxel != iter_voxel) or
+                                            or (not ignore_color and start_voxel != iter_voxel)
                                             # ... or not connected to the outside space
-                                            (has_offset[visited_index] and
-                                             not outside.get_value(*get_vector(a_back, i, c)))
+                                            or (has_offset[visited_index]
+                                                and not outside.get_value(*get_vector(a_back, i, c)))
                                     ):
                                         end_index_axis1 = i - 1
                                         found_end_axis1 = True
@@ -1228,14 +1228,14 @@ class GreedyMeshing:
                                         iter_voxel = voxels.get_value(*get_vector(a, i, j))
                                         if (
                                                 # No voxel found...
-                                                iter_voxel is None or
+                                                iter_voxel is None
                                                 # ...or already visited...
-                                                visited[visited_index][iter_visited_index] or
+                                                or visited[visited_index][iter_visited_index]
                                                 # ...or different color...
-                                                (not ignore_color and start_voxel != iter_voxel) or
+                                                or (not ignore_color and start_voxel != iter_voxel)
                                                 # ... or not connected to the outside space
-                                                (has_offset[visited_index] and
-                                                 not outside.get_value(*get_vector(a_back, i, j)))
+                                                or (has_offset[visited_index]
+                                                    and not outside.get_value(*get_vector(a_back, i, j)))
                                         ):
                                             any_mismatch_in_row = True
                                             break
@@ -1367,8 +1367,8 @@ class VoxMaterial:
         return VoxMaterial({"_rough": "0.1", "_ior": "0.3", "_ri": "1.3", "_d": "0.05"})
 
     def __str__(self):
-        return ("VoxMaterial {type: %s, roughness: %s, metallic: %s, specular: %s, ior: %s, emission: %s, " +
-                "flux: %s, ldr: %s, transmission: %s, media_type: %s, density: %s, phase: %s}") % (
+        return ("VoxMaterial {type: %s, roughness: %s, metallic: %s, specular: %s, ior: %s, emission: %s, "
+                + "flux: %s, ldr: %s, transmission: %s, media_type: %s, density: %s, phase: %s}") % (
             self.type, self.roughness, self.metallic, self.specular, self.ior, self.emission, self.flux,
             self.ldr,
             self.transmission, self.media_type, self.density, self.phase)
@@ -1534,7 +1534,7 @@ class SeparateColorNodeProxy(ShaderNodeProxy):
             self.output_red_key = self.get_node_output_key(self.node, "Red")
             self.output_green_key = self.get_node_output_key(self.node, "Green")
             self.output_blue_key = self.get_node_output_key(self.node, "Blue")
-        except:
+        except RuntimeError:
             self.node = nodes.new("ShaderNodeSeparateRGB")
             self.input_key = self.get_node_input_key(self.node, "Image")
             self.output_red_key = self.get_node_output_key(self.node, "R")
@@ -1559,7 +1559,7 @@ class VertexColorNodeProxy(ShaderNodeProxy):
         try:
             self.node = nodes.new("ShaderNodeVertexColor")
             self.node.layer_name = layer_name
-        except:
+        except RuntimeError:
             self.node = nodes.new("ShaderNodeAttribute")
             self.node.attribute_name = layer_name
         self.output_key = self.get_node_output_key(self.node, "Color")
@@ -1636,7 +1636,7 @@ class MaterialOutputNodeProxy(ShaderNodeProxy):
     def __init__(self, nodes):
         try:
             self.node = nodes[bpy.app.translations.pgettext("Material Output")]
-        except:
+        except RuntimeError:
             for node in nodes:
                 if node.bl_idname == "ShaderNodeOutputMaterial":
                     self.node = node
@@ -1651,7 +1651,7 @@ class PrincipledBSDFNodeProxy(ShaderNodeProxy):
     def __init__(self, nodes):
         try:
             self.node = nodes[bpy.app.translations.pgettext("Principled BSDF")]
-        except:
+        except RuntimeError:
             for node in nodes:
                 if node.type == "BSDF_PRINCIPLED" or node.bl_idname == "ShaderNodeBsdfPrincipled":
                     self.node = node
@@ -1745,14 +1745,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         name="Material Mode",
         items=[
             ("NONE", "Ignore", "Neither colors nor materials are imported."),
-            ("VERTEX_COLOR", "Vertex Color", "The color palette will be imported and assigned to face " +
-             "vertex colors. A simple material is added using the vertex colors as 'Base Color'."),
-            ("MAT_PER_COLOR", "Material Per Color", "A material is added per color in the color palette and assigned " +
-             "to the faces material index."),
-            ("MAT_AS_TEX", "Materials As Texture", "The color palette is created as a 256x1 texture. A simple " +
-             "material is added using this texture."),
-            ("TEXTURED_MODEL", "Textured Models (UV unwrap)", "Each model is assigned a material and texture with " +
-             "UV unwrap. Automatically locks Greedy meshing mode."),
+            ("VERTEX_COLOR", "Vertex Color", "The color palette will be imported and assigned to face "
+             + "vertex colors. A simple material is added using the vertex colors as 'Base Color'."),
+            ("MAT_PER_COLOR", "Material Per Color", "A material is added per color in the color palette and assigned "
+             + "to the faces material index."),
+            ("MAT_AS_TEX", "Materials As Texture", "The color palette is created as a 256x1 texture. A simple "
+             + "material is added using this texture."),
+            ("TEXTURED_MODEL", "Textured Models (UV unwrap)", "Each model is assigned a material and texture with "
+             + "UV unwrap. Automatically locks Greedy meshing mode."),
         ],
         description="",
         default="VERTEX_COLOR"
@@ -1831,8 +1831,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             absorb_node.get_input_color().default_value = color
                             absorb_node.get_input_density().default_value = material.density
                             links.new(absorb_node.get_output(), mat_output_node.get_input_volume())
-                        elif (material.media_type == VoxMaterial.MEDIA_TYPE_SCATTER or
-                              material.media_type == VoxMaterial.MEDIA_TYPE_SSS):  # TODO: own SSS
+                        elif (material.media_type == VoxMaterial.MEDIA_TYPE_SCATTER
+                              or material.media_type == VoxMaterial.MEDIA_TYPE_SSS):  # TODO: own SSS
                             scatter_node = VolumeScatterNodeProxy(nodes)
                             scatter_node.get_input_color().default_value = color
                             scatter_node.get_input_density().default_value = material.density
