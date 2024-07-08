@@ -23,5 +23,7 @@ paths_exclude_pattern = [
     "*.md",
     "LICENSE",
     ".flake8",
-    "*.zip"
+    "*.zip",
+    "examples",
+    "*.vox"
 ]
