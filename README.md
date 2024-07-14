@@ -3,6 +3,7 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/AstrorEnales/blender_magicavoxel/total?style=flat-square&color=forestgreen)
 [![Discord](https://img.shields.io/badge/discord-join-blue?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/vnKd9DT35Z)
 [![itch.io](https://img.shields.io/badge/support_on_itch.io-grey?style=flat-square&logo=itch.io&logoColor=FF2449)](https://astralcrowgames.itch.io/blender-magicavoxel-addon)
+[![blender.org](https://img.shields.io/badge/blender.org-extensions-blue?style=flat-square&logoColor=white)](https://extensions.blender.org/add-ons/blender-magicavoxel/)
 
 # blender_magicavoxel
 
@@ -23,6 +24,8 @@ please feel free to create an issue with
 the version info.
 
 ## 🔧 Installation
+
+Starting with Blender 4.2, the addon can be installed directly inside Blender from the new extensions platform!
 
 A detailed description of how to install addons in Blender can be found in
 the [Blender documentation for installing addons](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons)
