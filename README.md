@@ -25,8 +25,10 @@ the version info.
 
 ## 🔧 Installation
 
-Starting with Blender 4.2, the addon can be installed directly inside Blender from the new extensions platform!
+### Blender 4.2 or newer
+Starting with Blender 4.2, the addon can be installed directly inside Blender from the [extensions platform](https://extensions.blender.org/add-ons/blender-magicavoxel/)!
 
+### Before Blender 4.2
 A detailed description of how to install addons in Blender can be found in
 the [Blender documentation for installing addons](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons)
 .

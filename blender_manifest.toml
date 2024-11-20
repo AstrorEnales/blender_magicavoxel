@@ -8,7 +8,7 @@ maintainer = "AstrorEnales"
 type = "add-on"
 tags = ["Import-Export"]
 blender_version_min = "4.2.0"
-license = ["SPDX:MIT"]
+license = ["SPDX:GPL-3.0-or-later", "SPDX:MIT"]
 website = "https://github.com/AstrorEnales/blender_magicavoxel"
 [permissions]
 files = "Import VOX from disk"
