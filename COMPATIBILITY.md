@@ -2,40 +2,41 @@
 
 ## MagicaVoxel versions
 
-| MagicaVoxel Version |     Status     |
-|--------------------:|:--------------:|
-|     0.99.7.1 (Beta) |       ✅        |
-|     0.99.7.0 (Beta) |       ✅        |
-|            0.99.6.4 | not tested yet |
-|            0.99.6.2 | not tested yet |
-|            0.99.5.1 | not tested yet |
-|              0.99.5 | not tested yet |
-|            0.99.4.2 | not tested yet |
-|            0.99.4.1 | not tested yet |
-|              0.99.4 | not tested yet |
-|              0.99.3 |       ✅        |
-|              0.99.2 | not tested yet |
-|              0.99.1 | not tested yet |
-|                0.99 | not tested yet |
-|              0.98.2 | not tested yet |
-|              0.98.1 | not tested yet |
-|                0.98 | not tested yet |
-|              0.97.5 | not tested yet |
-|              0.97.4 | not tested yet |
-|              0.97.3 | not tested yet |
-|              0.97.2 | not tested yet |
-|              0.97.1 | not tested yet |
-|                0.97 | not tested yet |
-|              0.96.3 | not tested yet |
-|              0.96.2 | not tested yet |
-|              0.96.1 | not tested yet |
-|                0.96 | not tested yet |
+| MagicaVoxel Version |     Status     | Available for testing |
+|--------------------:|:--------------:|:---------------------:|
+|     0.99.7.1 (Beta) |       ✅        |           X           |
+|     0.99.7.0 (Beta) |       ✅        |           X           |
+|            0.99.6.4 | not tested yet |           X           |
+|            0.99.6.2 | not tested yet |           X           |
+|              0.99.6 | not tested yet |           X           |
+|            0.99.5.1 | not tested yet |           X           |
+|              0.99.5 | not tested yet |      unavailable      |
+|            0.99.4.2 | not tested yet |           X           |
+|            0.99.4.1 | not tested yet |           X           |
+|              0.99.4 | not tested yet |           X           |
+|              0.99.3 |       ✅        |           X           |
+|              0.99.2 | not tested yet |           X           |
+|              0.99.1 | not tested yet |           X           |
+|                0.99 | not tested yet |      unavailable      |
+|              0.98.2 | not tested yet |           X           |
+|              0.98.1 | not tested yet |      unavailable      |
+|                0.98 | not tested yet |      unavailable      |
+|              0.97.5 | not tested yet |           X           |
+|              0.97.4 | not tested yet |      unavailable      |
+|              0.97.3 | not tested yet |      unavailable      |
+|              0.97.2 | not tested yet |      unavailable      |
+|              0.97.1 | not tested yet |      unavailable      |
+|                0.97 | not tested yet |      unavailable      |
+|              0.96.3 | not tested yet |      unavailable      |
+|              0.96.2 | not tested yet |      unavailable      |
+|              0.96.1 | not tested yet |      unavailable      |
+|                0.96 | not tested yet |      unavailable      |
 
 ## Blender versions
 
 This table only lists versions of Blender with bundled Python 3+
 
-> Newest compatible tested version: **4.3.0**
+> Newest compatible tested version: **4.3.2**
 > 
 > Oldest compatible tested version: **2.80**
 > 
@@ -43,8 +44,8 @@ This table only lists versions of Blender with bundled Python 3+
 
 |           Blender Version | Python Version | Status |
 |--------------------------:|---------------:|:------:|
-|                     4.3.0 |         3.11.9 |   ✅    |
-|             4.2.0 - 4.2.4 |         3.11.7 |   ✅    |
+|             4.3.0 - 4.3.2 |         3.11.9 |   ✅    |
+|             4.2.0 - 4.2.5 |         3.11.7 |   ✅    |
 |             4.1.0 - 4.1.1 |         3.11.7 |   ✅    |
 |                     4.0.2 |        3.10.13 |   ✅    |
 |                     4.0.1 |        3.10.13 |   ~*   |
