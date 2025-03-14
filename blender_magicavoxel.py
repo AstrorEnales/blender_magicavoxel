@@ -2221,9 +2221,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                     pindex = (pixel_offset_iy + x + ix) * 4
                                     texture_pixels[0][pindex:pindex + 4] = color
                                     if self.import_material_props:
-                                        texture_pixels[1][pindex:pindex + 4] = [color_material.metallic] * 3
-                                        texture_pixels[2][pindex:pindex + 4] = [color_material.emission] * 3
-                                        texture_pixels[3][pindex:pindex + 4] = [color_material.roughness] * 3
+                                        texture_pixels[1][pindex:pindex + 3] = [color_material.metallic] * 3
+                                        texture_pixels[2][pindex:pindex + 3] = [color_material.emission] * 3
+                                        texture_pixels[3][pindex:pindex + 3] = [color_material.roughness] * 3
                         # Setup model material
                         closest_interpolation_key = "Closest"
                         color_texture = bpy.data.images.new(collection_name + " Color Texture",
