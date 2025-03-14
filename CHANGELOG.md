@@ -1,5 +1,10 @@
 # Changelog
 
+## [v1.5.6](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.6)
+
+  * **[fix]** #14 Fix textured models material texture creation
+  * **[change]** Compatibility with the blender extensions registry
+
 ## [v1.5.5](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.5)
 
   * **[fix]** #12 Fix and optimize UV unwrap mode
