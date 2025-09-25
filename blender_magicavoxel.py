@@ -67,67 +67,53 @@ bl_info = {
     "support": "COMMUNITY",
 }
 
-
-def abgr_int_to_rgba_tuple(color: int) -> Tuple[int, int, int, int]:
-    return (
-        (color >> 24) & 0xff,
-        (color >> 16) & 0xff,
-        (color >> 8) & 0xff,
-        color & 0xff
-    )
-
-
-DEFAULT_PALETTE: List[Tuple[int, int, int, int]] = [
-    abgr_int_to_rgba_tuple(x) for x in [
-        0x00000000, 0xffffffff, 0xffccffff, 0xff99ffff, 0xff66ffff, 0xff33ffff,
-        0xff00ffff, 0xffffccff, 0xffccccff, 0xff99ccff, 0xff66ccff, 0xff33ccff,
-        0xff00ccff, 0xffff99ff, 0xffcc99ff, 0xff9999ff, 0xff6699ff, 0xff3399ff,
-        0xff0099ff, 0xffff66ff, 0xffcc66ff, 0xff9966ff, 0xff6666ff, 0xff3366ff,
-        0xff0066ff, 0xffff33ff, 0xffcc33ff, 0xff9933ff, 0xff6633ff, 0xff3333ff,
-        0xff0033ff, 0xffff00ff, 0xffcc00ff, 0xff9900ff, 0xff6600ff, 0xff3300ff,
-        0xff0000ff, 0xffffffcc, 0xffccffcc, 0xff99ffcc, 0xff66ffcc, 0xff33ffcc,
-        0xff00ffcc, 0xffffcccc, 0xffcccccc, 0xff99cccc, 0xff66cccc, 0xff33cccc,
-        0xff00cccc, 0xffff99cc, 0xffcc99cc, 0xff9999cc, 0xff6699cc, 0xff3399cc,
-        0xff0099cc, 0xffff66cc, 0xffcc66cc, 0xff9966cc, 0xff6666cc, 0xff3366cc,
-        0xff0066cc, 0xffff33cc, 0xffcc33cc, 0xff9933cc, 0xff6633cc, 0xff3333cc,
-        0xff0033cc, 0xffff00cc, 0xffcc00cc, 0xff9900cc, 0xff6600cc, 0xff3300cc,
-        0xff0000cc, 0xffffff99, 0xffccff99, 0xff99ff99, 0xff66ff99, 0xff33ff99,
-        0xff00ff99, 0xffffcc99, 0xffcccc99, 0xff99cc99, 0xff66cc99, 0xff33cc99,
-        0xff00cc99, 0xffff9999, 0xffcc9999, 0xff999999, 0xff669999, 0xff339999,
-        0xff009999, 0xffff6699, 0xffcc6699, 0xff996699, 0xff666699, 0xff336699,
-        0xff006699, 0xffff3399, 0xffcc3399, 0xff993399, 0xff663399, 0xff333399,
-        0xff003399, 0xffff0099, 0xffcc0099, 0xff990099, 0xff660099, 0xff330099,
-        0xff000099, 0xffffff66, 0xffccff66, 0xff99ff66, 0xff66ff66, 0xff33ff66,
-        0xff00ff66, 0xffffcc66, 0xffcccc66, 0xff99cc66, 0xff66cc66, 0xff33cc66,
-        0xff00cc66, 0xffff9966, 0xffcc9966, 0xff999966, 0xff669966, 0xff339966,
-        0xff009966, 0xffff6666, 0xffcc6666, 0xff996666, 0xff666666, 0xff336666,
-        0xff006666, 0xffff3366, 0xffcc3366, 0xff993366, 0xff663366, 0xff333366,
-        0xff003366, 0xffff0066, 0xffcc0066, 0xff990066, 0xff660066, 0xff330066,
-        0xff000066, 0xffffff33, 0xffccff33, 0xff99ff33, 0xff66ff33, 0xff33ff33,
-        0xff00ff33, 0xffffcc33, 0xffcccc33, 0xff99cc33, 0xff66cc33, 0xff33cc33,
-        0xff00cc33, 0xffff9933, 0xffcc9933, 0xff999933, 0xff669933, 0xff339933,
-        0xff009933, 0xffff6633, 0xffcc6633, 0xff996633, 0xff666633, 0xff336633,
-        0xff006633, 0xffff3333, 0xffcc3333, 0xff993333, 0xff663333, 0xff333333,
-        0xff003333, 0xffff0033, 0xffcc0033, 0xff990033, 0xff660033, 0xff330033,
-        0xff000033, 0xffffff00, 0xffccff00, 0xff99ff00, 0xff66ff00, 0xff33ff00,
-        0xff00ff00, 0xffffcc00, 0xffcccc00, 0xff99cc00, 0xff66cc00, 0xff33cc00,
-        0xff00cc00, 0xffff9900, 0xffcc9900, 0xff999900, 0xff669900, 0xff339900,
-        0xff009900, 0xffff6600, 0xffcc6600, 0xff996600, 0xff666600, 0xff336600,
-        0xff006600, 0xffff3300, 0xffcc3300, 0xff993300, 0xff663300, 0xff333300,
-        0xff003300, 0xffff0000, 0xffcc0000, 0xff990000, 0xff660000, 0xff330000,
-        0xff0000ee, 0xff0000dd, 0xff0000bb, 0xff0000aa, 0xff000088, 0xff000077,
-        0xff000055, 0xff000044, 0xff000022, 0xff000011, 0xff00ee00, 0xff00dd00,
-        0xff00bb00, 0xff00aa00, 0xff008800, 0xff007700, 0xff005500, 0xff004400,
-        0xff002200, 0xff001100, 0xffee0000, 0xffdd0000, 0xffbb0000, 0xffaa0000,
-        0xff880000, 0xff770000, 0xff550000, 0xff440000, 0xff220000, 0xff110000,
-        0xffeeeeee, 0xffdddddd, 0xffbbbbbb, 0xffaaaaaa, 0xff888888, 0xff777777,
-        0xff555555, 0xff444444, 0xff222222, 0xff111111,
-    ]
+DEFAULT_PALETTE: List[int] = [
+    0xffffffff, 0xffffccff, 0xffff99ff, 0xffff66ff, 0xffff33ff, 0xffff00ff,
+    0xffccffff, 0xffccccff, 0xffcc99ff, 0xffcc66ff, 0xffcc33ff, 0xffcc00ff,
+    0xff99ffff, 0xff99ccff, 0xff9999ff, 0xff9966ff, 0xff9933ff, 0xff9900ff,
+    0xff66ffff, 0xff66ccff, 0xff6699ff, 0xff6666ff, 0xff6633ff, 0xff6600ff,
+    0xff33ffff, 0xff33ccff, 0xff3399ff, 0xff3366ff, 0xff3333ff, 0xff3300ff,
+    0xff00ffff, 0xff00ccff, 0xff0099ff, 0xff0066ff, 0xff0033ff, 0xff0000ff,
+    0xccffffff, 0xccffccff, 0xccff99ff, 0xccff66ff, 0xccff33ff, 0xccff00ff,
+    0xccccffff, 0xccccccff, 0xcccc99ff, 0xcccc66ff, 0xcccc33ff, 0xcccc00ff,
+    0xcc99ffff, 0xcc99ccff, 0xcc9999ff, 0xcc9966ff, 0xcc9933ff, 0xcc9900ff,
+    0xcc66ffff, 0xcc66ccff, 0xcc6699ff, 0xcc6666ff, 0xcc6633ff, 0xcc6600ff,
+    0xcc33ffff, 0xcc33ccff, 0xcc3399ff, 0xcc3366ff, 0xcc3333ff, 0xcc3300ff,
+    0xcc00ffff, 0xcc00ccff, 0xcc0099ff, 0xcc0066ff, 0xcc0033ff, 0xcc0000ff,
+    0x99ffffff, 0x99ffccff, 0x99ff99ff, 0x99ff66ff, 0x99ff33ff, 0x99ff00ff,
+    0x99ccffff, 0x99ccccff, 0x99cc99ff, 0x99cc66ff, 0x99cc33ff, 0x99cc00ff,
+    0x9999ffff, 0x9999ccff, 0x999999ff, 0x999966ff, 0x999933ff, 0x999900ff,
+    0x9966ffff, 0x9966ccff, 0x996699ff, 0x996666ff, 0x996633ff, 0x996600ff,
+    0x9933ffff, 0x9933ccff, 0x993399ff, 0x993366ff, 0x993333ff, 0x993300ff,
+    0x9900ffff, 0x9900ccff, 0x990099ff, 0x990066ff, 0x990033ff, 0x990000ff,
+    0x66ffffff, 0x66ffccff, 0x66ff99ff, 0x66ff66ff, 0x66ff33ff, 0x66ff00ff,
+    0x66ccffff, 0x66ccccff, 0x66cc99ff, 0x66cc66ff, 0x66cc33ff, 0x66cc00ff,
+    0x6699ffff, 0x6699ccff, 0x669999ff, 0x669966ff, 0x669933ff, 0x669900ff,
+    0x6666ffff, 0x6666ccff, 0x666699ff, 0x666666ff, 0x666633ff, 0x666600ff,
+    0x6633ffff, 0x6633ccff, 0x663399ff, 0x663366ff, 0x663333ff, 0x663300ff,
+    0x6600ffff, 0x6600ccff, 0x660099ff, 0x660066ff, 0x660033ff, 0x660000ff,
+    0x33ffffff, 0x33ffccff, 0x33ff99ff, 0x33ff66ff, 0x33ff33ff, 0x33ff00ff,
+    0x33ccffff, 0x33ccccff, 0x33cc99ff, 0x33cc66ff, 0x33cc33ff, 0x33cc00ff,
+    0x3399ffff, 0x3399ccff, 0x339999ff, 0x339966ff, 0x339933ff, 0x339900ff,
+    0x3366ffff, 0x3366ccff, 0x336699ff, 0x336666ff, 0x336633ff, 0x336600ff,
+    0x3333ffff, 0x3333ccff, 0x333399ff, 0x333366ff, 0x333333ff, 0x333300ff,
+    0x3300ffff, 0x3300ccff, 0x330099ff, 0x330066ff, 0x330033ff, 0x330000ff,
+    0x00ffffff, 0x00ffccff, 0x00ff99ff, 0x00ff66ff, 0x00ff33ff, 0x00ff00ff,
+    0x00ccffff, 0x00ccccff, 0x00cc99ff, 0x00cc66ff, 0x00cc33ff, 0x00cc00ff,
+    0x0099ffff, 0x0099ccff, 0x009999ff, 0x009966ff, 0x009933ff, 0x009900ff,
+    0x0066ffff, 0x0066ccff, 0x006699ff, 0x006666ff, 0x006633ff, 0x006600ff,
+    0x0033ffff, 0x0033ccff, 0x003399ff, 0x003366ff, 0x003333ff, 0x003300ff,
+    0x0000ffff, 0x0000ccff, 0x000099ff, 0x000066ff, 0x000033ff, 0xee0000ff,
+    0xdd0000ff, 0xbb0000ff, 0xaa0000ff, 0x880000ff, 0x770000ff, 0x550000ff,
+    0x440000ff, 0x220000ff, 0x110000ff, 0x00ee00ff, 0x00dd00ff, 0x00bb00ff,
+    0x00aa00ff, 0x008800ff, 0x007700ff, 0x005500ff, 0x004400ff, 0x002200ff,
+    0x001100ff, 0x0000eeff, 0x0000ddff, 0x0000bbff, 0x0000aaff, 0x000088ff,
+    0x000077ff, 0x000055ff, 0x000044ff, 0x000022ff, 0x000011ff, 0xeeeeeeff,
+    0xddddddff, 0xbbbbbbff, 0xaaaaaaff, 0x888888ff, 0x777777ff, 0x555555ff,
+    0x444444ff, 0x222222ff, 0x111111ff, 0xff000000,
 ]
 
 DEBUG_OUTPUT = False
-READ_INT_UNPACK = struct.Struct('<i').unpack
-READ_FLOAT_UNPACK = struct.Struct('<f').unpack
 
 
 class RectanglePacker:
@@ -1379,6 +1365,7 @@ class VoxMesh:
         self.model_id = model_id
         self.num_voxels = 0
         self.grid: VoxelGrid = VoxelGrid(width, depth, height)
+        self.voxel_data = None
         self.voxels = Octree()
         self.used_color_indices: Set[int] = set()
 
@@ -1446,7 +1433,8 @@ class VoxModel:
     def __init__(self, version: int):
         self.version = version
         self.next_model_id: int = 0
-        self.color_palette = [x for x in DEFAULT_PALETTE]
+        self.color_palette = DEFAULT_PALETTE.copy()
+        self.index_map = None
         self.materials: Dict[int, VoxMaterial] = {i: VoxMaterial.get_default() for i in range(0, 256)}
         self.layers: Dict[int, Dict[str, str]] = {}
         self.cameras: Dict[int, Dict[str, str]] = {}
@@ -1471,7 +1459,7 @@ class VoxModel:
 
     def get_color(self, color_index: int) -> Tuple[float, float, float, float]:
         color = self.color_palette[color_index]
-        return color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, color[3] / 255.0
+        return (color & 0xff) / 255.0, (color >> 8 & 0xff) / 255.0, (color >> 16 & 0xff) / 255.0, (color >> 24 & 0xff) / 255.0
 
     def is_layer_hidden(self, layer_id: int):
         return layer_id in self.layers and '_hidden' in self.layers[layer_id] and \
@@ -1851,10 +1839,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         for color_index in range(len(model.color_palette)):
             color = model.get_color(color_index)
             pixel_index = color_index * 4
-            color_texture.pixels[pixel_index] = color[0]
-            color_texture.pixels[pixel_index + 1] = color[1]
-            color_texture.pixels[pixel_index + 2] = color[2]
-            color_texture.pixels[pixel_index + 3] = color[3]
+            color_texture.pixels[pixel_index:pixel_index + 4] = color
         mat = bpy.data.materials.new(name=collection_name + " Material")
         mat.use_nodes = True
         nodes = mat.node_tree.nodes
@@ -1919,6 +1904,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             active_collection = view_layer.active_layer_collection.collection
             voxel_collection = context.blend_data.collections.new(name=collection_name)
             active_collection.children.link(voxel_collection)
+
             if self.import_cameras:
                 for camera_id in result.cameras:
                     camera = result.cameras[camera_id]
@@ -2399,6 +2385,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 print('[DEBUG] MagicaVoxel vox file version %s' % version)
             while f.tell() < os.fstat(f.fileno()).st_size:
                 ImportVOX.read_next_chunk(f, model)
+            ImportVOX.post_process_model(model)
         return model
 
     @staticmethod
@@ -2407,11 +2394,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_int32(f: IO) -> int:
-        return READ_INT_UNPACK(f.read(4))[0]
+        return struct.unpack('<i', f.read(4))[0]
 
     @staticmethod
     def read_float32(f: IO) -> int:
-        return READ_FLOAT_UNPACK(f.read(4))[0]
+        return struct.unpack('<f', f.read(4))[0]
 
     @staticmethod
     def read_string(f: IO) -> str:
@@ -2447,11 +2434,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         num_voxels = ImportVOX.read_int32(f)
         mesh = model.meshes[-1]
         mesh.num_voxels = num_voxels
-        voxel_data = bytearray(num_voxels * 4)
-        f.readinto(voxel_data)
-        for i in range(0, len(voxel_data), 4):
-            mesh.voxels.add(int(voxel_data[i]), int(voxel_data[i + 1]), int(voxel_data[i + 2]), int(voxel_data[i + 3]))
-        mesh.used_color_indices.update({int(voxel_data[i + 3]) for i in range(0, len(voxel_data), 4)})
+        mesh.voxel_data = bytearray(num_voxels * 4)
+        f.readinto(mesh.voxel_data)
 
     @staticmethod
     def read_rcam_chunk(f: IO, model: VoxModel):
@@ -2505,7 +2489,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_matt_chunk(f: IO, model: VoxModel):
-        material_id = ImportVOX.read_int32(f) % 256
+        material_id = ImportVOX.read_int32(f)
+        material_id = material_id & 0xff  # incoming material 256 is material 0
         # 0: diffuse, 1: metal, 2: glass, 3: emissive
         material_type = ImportVOX.read_int32(f)
         type_keys = ['_diffuse', '_metal', '_glass', '_emit']
@@ -2544,22 +2529,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     @staticmethod
     def read_rgba_chunk(f: IO, model: VoxModel):
-        custom_palette: List[Tuple[int, int, int, int]] = [(0, 0, 0, 255)]
-        color_data = struct.unpack('%sB' % 256 * 4, f.read(256 * 4))
-        for i in range(256):
-            offset = i * 4
-            color = (color_data[offset], color_data[offset + 1], color_data[offset + 2], color_data[offset + 3])
-            if i == 255:
-                custom_palette[0] = color
-            else:
-                custom_palette.append(color)
-        model.color_palette = custom_palette
+        model.color_palette = list(struct.unpack('%sI' % 256, f.read(256 * 4)))
 
     @staticmethod
-    def read_imap_chunk(f: IO, _: VoxModel):
-        _ = struct.unpack('%sB' % 256, f.read(256))  # imap_data
-        # _ = {imap_data[i]: (i + 1) % 256 for i in range(256)}
-        # IMAP in combination with custom palette is only relevant for showing the palette in MV. Ignored.
+    def read_imap_chunk(f: IO, model: VoxModel):
+        model.index_map = struct.unpack('%sB' % 256, f.read(256))  # imap_data
 
     @staticmethod
     def read_note_chunk(f: IO, _: VoxModel):
@@ -2607,6 +2581,52 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
     def draw(self, context):
         pass
+
+    def post_process_model(model: VoxModel):
+        # To support index-level assumptions (eg. artists using top 16 colors for color/palette cycling,
+        # other ranges for emissive etc), we must ensure the order of colors that the artist sees in the
+        # magicavoxel tool matches the actual index we'll end up using here. Unfortunately, magicavoxel
+        # does an unexpected thing when remapping colors in the editor using ctrl+drag within the palette.
+        # Instead of remapping all indices in all models, it just keeps track of a display index to actual
+        # palette map and uses that to show reordered colors in the palette window. This is how that
+        # map works:
+        #   displaycolor[k] = paletteColor[index_map[k]]
+        # To ensure our indices are in the same order as displayed by magicavoxel within the palette
+        # window, we apply the mapping from the IMAP chunk both to the color palette and indices within each
+        # voxel model.
+        if model.index_map:
+            # the imap chunk maps from display index to actual index.
+            # generate an inverse index map (maps from actual index to display index)
+            index_map_inverse = bytearray(256)
+            for i in range(256):
+                index_map_inverse[model.index_map[i]] = i
+
+            # reorder colors in the palette so the palette contains colors in display order
+            old_palette = model.color_palette.copy()
+            for i in range(256):
+                remapped_index = (model.index_map[i] + 255) & 0xff
+                model.color_palette[i] = old_palette[remapped_index]
+
+            # reorder materials
+            old_materials = model.materials.copy()
+            for i in range(256):
+                remapped_i = (i + 255) & 0xff
+                remapped_index = model.index_map[remapped_i]
+                model.materials[i] = old_materials[remapped_index]
+
+            # ensure that all models are remapped so they are using display order palette indices.
+            for mesh in model.meshes:
+                for i in range(3, len(mesh.voxel_data), 4):
+                    mesh.voxel_data[i] = 1 + index_map_inverse[mesh.voxel_data[i]]
+
+            model.index_map = None  # Clean index map since it has just been applied
+
+        # Process mesh used color indices and octrees
+        for mesh in model.meshes:
+            for i in range(0, len(mesh.voxel_data), 4):
+                mesh.voxels.add(int(mesh.voxel_data[i]), int(mesh.voxel_data[i + 1]),
+                                int(mesh.voxel_data[i + 2]), int(mesh.voxel_data[i + 3]))
+            mesh.used_color_indices.update({int(mesh.voxel_data[i]) for i in range(3, len(mesh.voxel_data), 4)})
 
 
 class VOX_PT_import_geometry(bpy.types.Panel):
