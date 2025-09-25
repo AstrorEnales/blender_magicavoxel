@@ -2621,6 +2621,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
 
             model.index_map = None  # Clean index map since it has just been applied
 
+        # rotate the scene palette now so voxel indices can just map straight into the palette
+        last_color = model.color_palette[255]
+        for i in range(255, 0, -1):
+            model.color_palette[i] = model.color_palette[i - 1]
+        model.color_palette[0] = last_color
+        # alpha is zero for the 0th color as that color index represents a transparent voxel.
+        model.color_palette[0] &= 0xffffff00
+
         # Process mesh used color indices and octrees
         for mesh in model.meshes:
             for i in range(0, len(mesh.voxel_data), 4):
