@@ -1534,7 +1534,7 @@ class SeparateColorNodeProxy(ShaderNodeProxy):
             self.output_red_key = self.get_node_output_key(self.node, "Red")
             self.output_green_key = self.get_node_output_key(self.node, "Green")
             self.output_blue_key = self.get_node_output_key(self.node, "Blue")
-        except RuntimeError:
+        except:
             self.node = nodes.new("ShaderNodeSeparateRGB")
             self.input_key = self.get_node_input_key(self.node, "Image")
             self.output_red_key = self.get_node_output_key(self.node, "R")
@@ -1559,7 +1559,7 @@ class VertexColorNodeProxy(ShaderNodeProxy):
         try:
             self.node = nodes.new("ShaderNodeVertexColor")
             self.node.layer_name = layer_name
-        except RuntimeError:
+        except:
             self.node = nodes.new("ShaderNodeAttribute")
             self.node.attribute_name = layer_name
         self.output_key = self.get_node_output_key(self.node, "Color")
@@ -1634,13 +1634,10 @@ class EmissionNodeProxy(ShaderNodeProxy):
 
 class MaterialOutputNodeProxy(ShaderNodeProxy):
     def __init__(self, nodes):
-        try:
-            self.node = nodes[bpy.app.translations.pgettext("Material Output")]
-        except RuntimeError:
-            for node in nodes:
-                if node.bl_idname == "ShaderNodeOutputMaterial":
-                    self.node = node
-                    break
+        for node in nodes:
+            if node.bl_idname == "ShaderNodeOutputMaterial":
+                self.node = node
+                break
         self.input_volume_key = self.get_node_input_key(self.node, "Volume")
 
     def get_input_volume(self):
@@ -1649,13 +1646,10 @@ class MaterialOutputNodeProxy(ShaderNodeProxy):
 
 class PrincipledBSDFNodeProxy(ShaderNodeProxy):
     def __init__(self, nodes):
-        try:
-            self.node = nodes[bpy.app.translations.pgettext("Principled BSDF")]
-        except RuntimeError:
-            for node in nodes:
-                if node.type == "BSDF_PRINCIPLED" or node.bl_idname == "ShaderNodeBsdfPrincipled":
-                    self.node = node
-                    break
+        for node in nodes:
+            if node.type == "BSDF_PRINCIPLED" or node.bl_idname == "ShaderNodeBsdfPrincipled":
+                self.node = node
+                break
         self.input_roughness_key = self.get_node_input_key(self.node, "Roughness")
         self.input_metallic_key = self.get_node_input_key(self.node, "Metallic")
         self.input_ior_key = self.get_node_input_key(self.node, "IOR")
