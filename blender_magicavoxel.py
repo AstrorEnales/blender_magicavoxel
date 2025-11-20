@@ -1368,6 +1368,7 @@ class VoxMesh:
         self.voxel_data = None
         self.voxels = Octree()
         self.used_color_indices: Set[int] = set()
+        self.node_id = -1
 
     def get_voxel_color_index(self, x: int, y: int, z: int) -> int or None:
         return self.voxels.get_value(x, y, z)
@@ -1382,6 +1383,7 @@ class VoxNode:
         self.frame_attributes: Dict[int, Dict[str, str]] = {}
         self.meshes: Dict[int, Dict[str, str]] = {}
         self.child_ids = []
+        self.name = None
 
     def get_transform(self, frame: int):
         matching_attributes_by_frame_key = [
@@ -2018,6 +2020,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     model_id_object_lookup[mesh_index] = []
                     continue
                 outside = mesh.grid.create_outside_grid(mesh.voxels)
+                mesh_name = ("mesh_%s" % mesh_index)
+                if mesh.node_id != -1:
+                    mesh_node = result.nodes[mesh.node_id]
+                    if len(mesh_node.meshes) == 1 and mesh_node.name:
+                        mesh_name = mesh_node.name
                 # =====================================================
                 # CUBES_AS_OBJ
                 # =====================================================
@@ -2028,7 +2035,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     voxel_iterator = OctreeIterator(mesh.voxels)
                     while voxel_iterator.move_next():
                         (x, y, z, color_index) = voxel_iterator.current
-                        new_mesh = bpy.data.meshes.new("mesh_%s_voxel_%s_%s_%s" % (mesh_index, x, y, z))
+                        new_mesh = bpy.data.meshes.new("%s_voxel_%s_%s_%s" % (mesh_name, x, y, z))
                         vertices = [
                             self.get_vertex_pos((x, y, z), mesh.grid),
                             self.get_vertex_pos((x + 1, y, z), mesh.grid),
@@ -2104,7 +2111,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         ]
                         for quad in quads
                     ]
-                    new_mesh = bpy.data.meshes.new("mesh_%s" % mesh_index)
+                    new_mesh = bpy.data.meshes.new(mesh_name)
                     new_mesh.from_pydata(vertices, [], faces)
                     new_mesh.update()
                     uv_layer = new_mesh.uv_layers.new(name="UVMap")
@@ -2216,7 +2223,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                                             width=packer.actual_packing_area_width,
                                                             height=packer.actual_packing_area_height)
                         color_texture.pixels = texture_pixels[0]
-                        mat = bpy.data.materials.new(name="mesh_%s Material" % mesh_index)
+                        mat = bpy.data.materials.new(name="%s Material" % mesh_name)
                         mat.use_nodes = True
                         nodes = mat.node_tree.nodes
                         links = mat.node_tree.links
@@ -2480,6 +2487,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             model_id = ImportVOX.read_int32(f)
             model_attributes = ImportVOX.read_dict(f)
             node.meshes[model_id] = model_attributes
+            model.meshes[model_id].node_id = node.node_id
         model.nodes[node.node_id] = node
 
     @staticmethod
@@ -2636,6 +2644,14 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                 int(mesh.voxel_data[i + 2]), int(mesh.voxel_data[i + 3]))
             mesh.used_color_indices.update({int(mesh.voxel_data[i]) for i in range(3, len(mesh.voxel_data), 4)})
 
+        # Propagate names from Transforms to Shapes and Groups
+        for node in model.nodes.values():
+            if node.type == 'TRN' and '_name' in node.node_attributes:
+                node.name = node.node_attributes['_name']
+                for child_id in node.child_ids:
+                    child_node = model.nodes[child_id]
+                    if child_node.name is None:
+                        child_node.name = node.name
 
 class VOX_PT_import_geometry(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
