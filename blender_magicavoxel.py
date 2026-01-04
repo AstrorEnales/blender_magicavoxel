@@ -1,6 +1,6 @@
 # MIT License
 #
-# Copyright (c) 2024 https://github.com/AstrorEnales
+# Copyright (c) 2022-2026 https://github.com/AstrorEnales
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal

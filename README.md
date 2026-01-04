@@ -160,3 +160,9 @@ and [here](https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/).
 |             Voxel Scale | ✅                                                                                     | ✅                                                                                                | ✅                                                                                               | ❌                                                                               |
 |    Custom Meshing Types | ✅                                                                                     | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
 |    Reduce To Voxel Hull | ✅                                                                                     | ❌                                                                                                | ❌                                                                                               | ❌                                                                               |
+
+## Contributors
+
+I would like to thank the following contributors:
+
+* Miguel Fernandez Arce (muit) - IMAP support
