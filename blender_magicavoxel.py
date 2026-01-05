@@ -937,122 +937,45 @@ class VoxelGrid:
         if DEBUG_OUTPUT:
             print('[DEBUG] create_outside_grid')
         timer_start = time.time()
-        outside = Octree(default_value=True)
         if voxels.is_not_empty:
-            distinct_areas = VoxelGrid.find_distinct_areas(voxels)
-            distinct_areas_iterator = OctreeIterator(distinct_areas)
-            while distinct_areas_iterator.move_next():
-                (x, y, z, _) = distinct_areas_iterator.current
-                if distinct_areas.get_value(x, y, z) != 0:
-                    outside.add(x, y, z, False)
+            outside = Octree(default_value=False)
+            b = voxels.not_empty_bounds
+            b = (b[0] - 1, b[1] - 1, b[2] - 1, b[3] + 1, b[4] + 1, b[5] + 1)
+            visited = set()
+            queue = {(b[0], b[1], b[2])}
+            while len(queue) > 0:
+                p = queue.pop()
+                visited.add(p)
+                outside.add(p[0], p[1], p[2], True)
+                if p[0] > b[0]:
+                    q = (p[0] - 1, p[1], p[2])
+                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                        queue.add(q)
+                if p[1] > b[1]:
+                    q = (p[0], p[1] - 1, p[2])
+                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                        queue.add(q)
+                if p[2] > b[2]:
+                    q = (p[0], p[1], p[2] - 1)
+                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                        queue.add(q)
+                if p[0] < b[3]:
+                    q = (p[0] + 1, p[1], p[2])
+                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                        queue.add(q)
+                if p[1] < b[4]:
+                    q = (p[0], p[1] + 1, p[2])
+                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                        queue.add(q)
+                if p[2] < b[5]:
+                    q = (p[0], p[1], p[2] + 1)
+                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                        queue.add(q)
+        else:
+            outside = Octree(default_value=True)
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return outside
-
-    @staticmethod
-    def find_distinct_areas(voxels: Octree) -> Octree:
-        """
-        connected-component labeling (CCL) with the Hoshen–Kopelman algorithm
-        modified to label all voxels -1 as we're only interested in non-voxel labels
-        """
-        if DEBUG_OUTPUT:
-            print('[DEBUG] find_distinct_areas')
-        timer_start = time.time()
-        labels = Octree(voxels.size, default_value=0)
-        label_equivalence: Dict[int, Set[int]] = {0: set()}
-        next_label = 1
-        leaf_bounds = [leaf.not_empty_bounds for leaf in voxels.leafs if leaf.is_not_empty]
-        leaf_bounds = [(b[0] - 1, b[1] - 1, b[2] - 1, b[3] + 1, b[4] + 1, b[5] + 1) for b in leaf_bounds]
-        count = -1
-        while count != len(leaf_bounds):
-            count = len(leaf_bounds)
-            for i in range(len(leaf_bounds) - 1, 0, -1):
-                b1 = leaf_bounds[i]
-                for j in range(i - 1, -1, -1):
-                    b2 = leaf_bounds[j]
-                    if not (b1[3] < b2[0] or b1[0] > b2[3] or b1[4] < b2[1] or b1[1] > b2[4] or b1[5] < b2[2]
-                            or b1[2] > b2[5]):
-                        leaf_bounds[j] = (
-                            min(b1[0], b2[0]), min(b1[1], b2[1]), min(b1[2], b2[2]),
-                            max(b1[3], b2[3]), max(b1[4], b2[4]), max(b1[5], b2[5])
-                        )
-                        del leaf_bounds[i]
-                        break
-        for bounds in leaf_bounds:
-            for z in range(bounds[2], bounds[5]):
-                for y in range(bounds[1], bounds[4]):
-                    for x in range(bounds[0], bounds[3]):
-                        if voxels.get_value(x, y, z) is not None:
-                            labels.add(x, y, z, -1)
-                            continue
-                        possible_labels: Set[int] = set()
-                        if voxels.get_value(x - 1, y, z) is None:
-                            possible_labels.add(labels.get_value(x - 1, y, z))
-                        if voxels.get_value(x, y - 1, z) is None:
-                            possible_labels.add(labels.get_value(x, y - 1, z))
-                        if voxels.get_value(x, y, z - 1) is None:
-                            possible_labels.add(labels.get_value(x, y, z - 1))
-                        if len(possible_labels) == 0:
-                            labels.add(x, y, z, next_label)
-                            label_equivalence[next_label] = set()
-                            next_label += 1
-                        elif len(possible_labels) == 1:
-                            labels.add(x, y, z, next(iter(possible_labels)))
-                        elif len(possible_labels) == 2:
-                            min_label = min(possible_labels)
-                            if min_label > 0:
-                                labels.add(x, y, z, min_label)
-                            tmp = list(possible_labels)
-                            if tmp[0] != tmp[1]:
-                                label_equivalence[tmp[0]].add(tmp[1])
-                                label_equivalence[tmp[1]].add(tmp[0])
-                        else:
-                            min_label = min(possible_labels)
-                            if min_label > 0:
-                                labels.add(x, y, z, min_label)
-                            tmp = list(possible_labels)
-                            if tmp[0] != tmp[1]:
-                                label_equivalence[tmp[0]].add(tmp[1])
-                                label_equivalence[tmp[1]].add(tmp[0])
-                            if tmp[0] != tmp[2]:
-                                label_equivalence[tmp[0]].add(tmp[2])
-                                label_equivalence[tmp[2]].add(tmp[0])
-                            if tmp[1] != tmp[2]:
-                                label_equivalence[tmp[1]].add(tmp[2])
-                                label_equivalence[tmp[2]].add(tmp[1])
-        # Collapse all overlapping sets until nothing changes anymore
-        count = 0
-        while count != len(label_equivalence):
-            count = len(label_equivalence)
-            for label in range(0, next_label):
-                if label in label_equivalence:
-                    connections = label_equivalence[label]
-                    if len(connections) > 0:
-                        min_label = min(connections)
-                        if min_label < label:
-                            del label_equivalence[label]
-                            for connected_label in connections:
-                                if connected_label in label_equivalence:
-                                    next_connections = label_equivalence[connected_label]
-                                    for other_label in connections:
-                                        if other_label != connected_label:
-                                            next_connections.add(other_label)
-        # Change all labels to the minimum of the equivalence set they belong to
-        label_map = {}
-        for key in label_equivalence:
-            for connection in label_equivalence[key]:
-                label_map[connection] = key
-        iterator = OctreeIterator(labels)
-        while iterator.move_next():
-            if iterator.current[3] in label_map:
-                value = label_map[iterator.current[3]]
-                if value > 0:
-                    labels.add(iterator.current[0], iterator.current[1], iterator.current[2], value)
-                else:
-                    labels.remove(iterator.current[0], iterator.current[1], iterator.current[2])
-        if DEBUG_OUTPUT:
-            print('[DEBUG] took %s sec' % (time.time() - timer_start))
-        return labels
 
 
 class Quad:
