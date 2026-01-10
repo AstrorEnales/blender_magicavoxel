@@ -233,8 +233,7 @@ class RectanglePacker:
         # Use the dimension in which the rectangle could be moved farther
         if placement[0] - left_most > placement[1] - top_most:
             return left_most, placement[1]
-        else:
-            return placement[0], top_most
+        return placement[0], top_most
 
     def try_pack(self, rectangle_width: int, rectangle_height: int) -> Tuple[int, int] or None:
         """
@@ -248,7 +247,7 @@ class RectanglePacker:
         if anchor_index == -1:
             return None
         anchor = self.anchors[anchor_index]
-        # Move the rectangle either to the left or to the top until it collides with a neighbouring rectangle. This is
+        # Move the rectangle either to the left or to the top until it collides with a neighboring rectangle. This is
         # done to combat the effect of lining up rectangles with gaps to the left or top of them because the anchor that
         # would allow placement there has been blocked by another rectangle
         placement = self.optimize_placement((anchor[0], anchor[1]), rectangle_width, rectangle_height)
@@ -2063,13 +2062,35 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         quad_placements: List[Tuple[int, int]] = []
                         if DEBUG_OUTPUT:
                             print('[DEBUG] finding texture space for', len(quads), 'quads')
-                        for quad in quads:
-                            quad_placement = packer.try_pack(quad.width, quad.height)
-                            if quad_placement is None:
-                                self.report({"WARNING"}, "Failed to unwrap all mesh faces onto texture")
+                        # The performance of the rectangle packer rapidly degrades after ~1500 quads. Therefore,
+                        # split the number of quads into sub-packing tasks for more than 1000 quads
+                        quad_split_size = 500 if len(quads) > 1000 else len(quads)
+                        for i in range(0, math.ceil(len(quads) / quad_split_size)):
+                            sub_packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
+                            sub_quad_placements = []
+                            for j in range(i * quad_split_size, min(len(quads), (i + 1) * quad_split_size)):
+                                quad = quads[j]
+                                quad_placement = sub_packer.try_pack(quad.width, quad.height)
+                                if quad_placement is None:
+                                    self.report({"WARNING"},
+                                                "Failed to unwrap all mesh faces onto texture. Consider increasing max texture size")
+                                    return {"CANCELLED"}
+                                sub_quad_placements.append((quad_placement[0], quad_placement[1]))
+
+                            sub_pack_placement = packer.try_pack(sub_packer.actual_packing_area_width,
+                                                                 sub_packer.actual_packing_area_height)
+                            if sub_pack_placement is None:
+                                self.report({"WARNING"},
+                                            "Failed to unwrap all mesh faces onto texture. Consider increasing max texture size")
                                 return {"CANCELLED"}
-                            quad_placements.append((quad_placement[0], quad_placement[1]))
+                            quad_placements.extend([
+                                (p[0] + sub_pack_placement[0], p[1] + sub_pack_placement[1])
+                                for p in sub_quad_placements
+                            ])
                         pixel_size = packer.actual_packing_area_width * packer.actual_packing_area_height
+                        if DEBUG_OUTPUT:
+                            print('[DEBUG] quads fit into pixel size', packer.actual_packing_area_width, 'x',
+                                  packer.actual_packing_area_height)
                         texture_pixels = [
                             [0.0, 0.0, 0.0, 1.0] * pixel_size
                         ]
