@@ -902,30 +902,21 @@ class VoxelGrid:
         self.height = height
 
     @staticmethod
-    def reduce_voxel_grid_to_hull(voxels: Octree, outside: Octree):
+    def reduce_voxel_grid_to_hull(voxels: Octree, outside: Set[Tuple[int, int, int]]):
         if DEBUG_OUTPUT:
             print('[DEBUG] reduce_voxel_grid_to_hull')
         timer_start = time.time()
         iterator = OctreeIterator(voxels)
         while iterator.move_next():
             (x, y, z, _) = iterator.current
-            # Left
-            if outside.get_value(x - 1, y, z):
+            # Left/Right
+            if (x - 1, y, z) in outside or (x + 1, y, z) in outside:
                 continue
-            # Right
-            if outside.get_value(x + 1, y, z):
+            # Down/Up
+            if (x, y - 1, z) in outside or (x, y + 1, z) in outside:
                 continue
-            # Down
-            if outside.get_value(x, y - 1, z):
-                continue
-            # Up
-            if outside.get_value(x, y + 1, z):
-                continue
-            # Back
-            if outside.get_value(x, y, z - 1):
-                continue
-            # Front
-            if outside.get_value(x, y, z + 1):
+            # Back/Front
+            if (x, y, z - 1) in outside or (x, y, z + 1) in outside:
                 continue
             # If not connected to the outside space, delete the voxel(inside hull)
             voxels.remove(x, y, z)
@@ -933,46 +924,42 @@ class VoxelGrid:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
 
     @staticmethod
-    def create_outside_grid(voxels: Octree) -> Octree:
+    def create_outside_grid(voxels: Octree) -> Set[Tuple[int, int, int]]:
         if DEBUG_OUTPUT:
             print('[DEBUG] create_outside_grid')
         timer_start = time.time()
+        outside = set()
         if voxels.is_not_empty:
-            outside = Octree(default_value=False)
             b = voxels.not_empty_bounds
             b = (b[0] - 1, b[1] - 1, b[2] - 1, b[3] + 1, b[4] + 1, b[5] + 1)
-            visited = set()
             queue = {(b[0], b[1], b[2])}
             while len(queue) > 0:
                 p = queue.pop()
-                visited.add(p)
-                outside.add(p[0], p[1], p[2], True)
+                outside.add(p)
                 if p[0] > b[0]:
                     q = (p[0] - 1, p[1], p[2])
-                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                    if not q in outside and voxels.get_value(q[0], q[1], q[2]) is None:
                         queue.add(q)
                 if p[1] > b[1]:
                     q = (p[0], p[1] - 1, p[2])
-                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                    if not q in outside and voxels.get_value(q[0], q[1], q[2]) is None:
                         queue.add(q)
                 if p[2] > b[2]:
                     q = (p[0], p[1], p[2] - 1)
-                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                    if not q in outside and voxels.get_value(q[0], q[1], q[2]) is None:
                         queue.add(q)
                 if p[0] < b[3]:
                     q = (p[0] + 1, p[1], p[2])
-                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                    if not q in outside and voxels.get_value(q[0], q[1], q[2]) is None:
                         queue.add(q)
                 if p[1] < b[4]:
                     q = (p[0], p[1] + 1, p[2])
-                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                    if not q in outside and voxels.get_value(q[0], q[1], q[2]) is None:
                         queue.add(q)
                 if p[2] < b[5]:
                     q = (p[0], p[1], p[2] + 1)
-                    if not q in visited and voxels.get_value(q[0], q[1], q[2]) is None:
+                    if not q in outside and voxels.get_value(q[0], q[1], q[2]) is None:
                         queue.add(q)
-        else:
-            outside = Octree(default_value=True)
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return outside
@@ -1012,7 +999,7 @@ class Quad:
 
 class SimpleQuadsMeshing:
     @staticmethod
-    def generate_mesh(voxels: Octree, outside: Octree, ignore_neighbours: bool) -> List[Quad]:
+    def generate_mesh(voxels: Octree, outside: Set[Tuple[int, int, int]], ignore_neighbours: bool) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] SimpleQuadsMeshing generate_mesh')
         timer_start = time.time()
@@ -1022,22 +1009,22 @@ class SimpleQuadsMeshing:
             (x, y, z, color_index) = iterator.current
             xn, xp, yn, yp, zn, zp = x - 1, x + 1, y - 1, y + 1, z - 1, z + 1
             # Left
-            if ignore_neighbours or outside.get_value(xn, y, z):
+            if ignore_neighbours or (xn, y, z) in outside:
                 quads.append(Quad((x, yp, z), (x, y, z), (x, y, zp), (x, yp, zp), (-1, 0, 0), color_index, 1, 1))
             # Right
-            if ignore_neighbours or outside.get_value(xp, y, z):
+            if ignore_neighbours or (xp, y, z) in outside:
                 quads.append(Quad((xp, y, z), (xp, yp, z), (xp, yp, zp), (xp, y, zp), (1, 0, 0), color_index, 1, 1))
             # Back
-            if ignore_neighbours or outside.get_value(x, yn, z):
+            if ignore_neighbours or (x, yn, z) in outside:
                 quads.append(Quad((x, y, z), (xp, y, z), (xp, y, zp), (x, y, zp), (0, -1, 0), color_index, 1, 1))
             # Front
-            if ignore_neighbours or outside.get_value(x, yp, z):
+            if ignore_neighbours or (x, yp, z) in outside:
                 quads.append(Quad((xp, yp, z), (x, yp, z), (x, yp, zp), (xp, yp, zp), (0, 1, 0), color_index, 1, 1))
             # Bottom
-            if ignore_neighbours or outside.get_value(x, y, zn):
+            if ignore_neighbours or (x, y, zn) in outside:
                 quads.append(Quad((xp, y, z), (x, y, z), (x, yp, z), (xp, yp, z), (0, 0, -1), color_index, 1, 1))
             # Top
-            if ignore_neighbours or outside.get_value(x, y, zp):
+            if ignore_neighbours or (x, y, zp) in outside:
                 quads.append(Quad((x, y, zp), (xp, y, zp), (xp, yp, zp), (x, yp, zp), (0, 0, 1), color_index, 1, 1))
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
@@ -1046,7 +1033,7 @@ class SimpleQuadsMeshing:
 
 class GreedyMeshing:
     @staticmethod
-    def generate_mesh(voxels: Octree, outside: Octree, ignore_color: bool = False) -> List[Quad]:
+    def generate_mesh(voxels: Octree, outside: Set[Tuple[int, int, int]], ignore_color: bool = False) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] GreedyMeshing generate_mesh')
         timer_start = time.time()
@@ -1060,8 +1047,8 @@ class GreedyMeshing:
         return quads
 
     @staticmethod
-    def mesh_axis(bounds: Tuple[int, int, int, int, int, int], voxels: Octree, outside: Octree, ignore_color: bool,
-                  axis_index: int, quads: List[Quad]):
+    def mesh_axis(bounds: Tuple[int, int, int, int, int, int], voxels: Octree, outside: Set[Tuple[int, int, int]],
+                  ignore_color: bool, axis_index: int, quads: List[Quad]):
         axis1_index = {0: 1, 1: 0, 2: 0}[axis_index]
         axis2_index = {0: 2, 1: 2, 2: 1}[axis_index]
         axis_sizes = {0: bounds[3] - bounds[0], 1: bounds[4] - bounds[1], 2: bounds[5] - bounds[2]}
@@ -1102,7 +1089,7 @@ class GreedyMeshing:
                         for visited_index in range(0, 2):
                             if not visited[visited_index][visited_start_index]:
                                 a_back = a + normal_offsets[visited_index]
-                                if has_offset[visited_index] and not outside.get_value(*get_vector(a_back, b, c)):
+                                if has_offset[visited_index] and get_vector(a_back, b, c) not in outside:
                                     visited[visited_index][visited_start_index] = True
                                     continue
                                 # Move first axis until end or voxel mismatch
@@ -1120,7 +1107,7 @@ class GreedyMeshing:
                                             or (not ignore_color and start_voxel != iter_voxel)
                                             # ... or not connected to the outside space
                                             or (has_offset[visited_index]
-                                                and not outside.get_value(*get_vector(a_back, i, c)))
+                                                and get_vector(a_back, i, c) not in outside)
                                     ):
                                         end_index_axis1 = i - 1
                                         found_end_axis1 = True
@@ -1144,7 +1131,7 @@ class GreedyMeshing:
                                                 or (not ignore_color and start_voxel != iter_voxel)
                                                 # ... or not connected to the outside space
                                                 or (has_offset[visited_index]
-                                                    and not outside.get_value(*get_vector(a_back, i, j)))
+                                                    and get_vector(a_back, i, j) not in outside)
                                         ):
                                             any_mismatch_in_row = True
                                             break
