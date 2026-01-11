@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.5.7](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.7)
+
+  * **[feature]** #15 Add support for IMAP color palette reordering
+  * **[fix]** #17 Performance improvements to speed up voxel hull calculation
+  * **[fix]** #17 Performance improvements to speed up texture generation
+  * **[fix]** #16 Fix material node selection with partial UI translation
+
 ## [v1.5.6](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.6)
 
   * **[fix]** #14 Fix textured models material texture creation
