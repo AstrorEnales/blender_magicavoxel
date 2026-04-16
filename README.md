@@ -165,4 +165,7 @@ and [here](https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/).
 
 I would like to thank the following contributors:
 
-* Miguel Fernandez Arce (muit) - IMAP support
+* Miguel Fernandez Arce (muit)
+  * IMAP support
+* playmyskay
+  * Color space conversion and emission fixes

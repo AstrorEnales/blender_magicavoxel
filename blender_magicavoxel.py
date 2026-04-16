@@ -1369,6 +1369,12 @@ class VoxModel:
         return result
 
     def get_color(self, color_index: int) -> Tuple[float, float, float, float]:
+        """
+        General color considerations:
+          * Vertex colors are considered sRGB and automatically converted to linear when fed into a BSDF node
+          * Setting BSDF node properties directly, needs prior conversion to linear
+          * Material textures are set to sRGB and automatically converted to linear when fed into a BSDF node
+        """
         color = self.color_palette[color_index]
         return (color & 0xff) / 255.0, (color >> 8 & 0xff) / 255.0, (color >> 16 & 0xff) / 255.0, (color >> 24 & 0xff) / 255.0
 
