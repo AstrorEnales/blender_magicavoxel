@@ -1229,8 +1229,8 @@ class VoxMaterial:
         # default 0.3 / 1.3
         self.ior = float(data["_ri"]) if "_ri" in data else 1.3
         # _flux --> Power {0, 1, 2, 3, 4}, default 0
-        # We calculate +1 to the power as we handle it just as a multiplier
-        self.flux = float(data["_flux"]) + 1 if "_flux" in data and self.type == "_emit" else 0
+        # Power acts as an exponential intensity scale in MagicaVoxel
+        self.flux = pow(2, float(data["_flux"]) + 1) if "_flux" in data and self.type == "_emit" else (2 if self.type == "_emit" else 0)
         has_emission = self.type == VoxMaterial.TYPE_EMIT
         # _emit --> Emission [0-1] float, default: 0.0
         self.emission = float(data["_emit"]) * self.flux if "_emit" in data and has_emission else 0
@@ -1372,6 +1372,14 @@ class VoxModel:
         color = self.color_palette[color_index]
         return (color & 0xff) / 255.0, (color >> 8 & 0xff) / 255.0, (color >> 16 & 0xff) / 255.0, (color >> 24 & 0xff) / 255.0
 
+    @staticmethod
+    def srgb_to_linear(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    def get_color_linear(self, color_index: int) -> Tuple[float, float, float, float]:
+        r, g, b, a = self.get_color(color_index)
+        return self.srgb_to_linear(r), self.srgb_to_linear(g), self.srgb_to_linear(b), a
+
     def is_layer_hidden(self, layer_id: int):
         return layer_id in self.layers and '_hidden' in self.layers[layer_id] and \
             self.layers[layer_id]['_hidden'] == '1'
@@ -1462,18 +1470,26 @@ class VertexColorNodeProxy(ShaderNodeProxy):
             self.node = nodes.new("ShaderNodeAttribute")
             self.node.attribute_name = layer_name
         self.output_key = self.get_node_output_key(self.node, "Color")
+        self.output_alpha_key = self.get_node_output_key(self.node, "Alpha", ["Fac"])
 
     def get_output(self):
         return self.node.outputs[self.output_key]
+
+    def get_output_alpha(self):
+        return self.node.outputs[self.output_alpha_key]
 
 
 class TexImageNodeProxy(ShaderNodeProxy):
     def __init__(self, nodes):
         self.node = nodes.new("ShaderNodeTexImage")
         self.output_key = self.get_node_output_key(self.node, "Color")
+        self.output_alpha_key = self.get_node_output_key(self.node, "Alpha")
 
     def get_output(self):
         return self.node.outputs[self.output_key]
+
+    def get_output_alpha(self):
+        return self.node.outputs[self.output_alpha_key]
 
 
 class VolumeAbsorptionNodeProxy(ShaderNodeProxy):
@@ -1689,7 +1705,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             links.new(separate_rgb_node.get_output_red(), bdsf_node.get_input_roughness())
             links.new(separate_rgb_node.get_output_green(), bdsf_node.get_input_metallic())
             links.new(separate_rgb_node.get_output_blue(), bdsf_node.get_input_ior())
-            bdsf_node.set_input_emission_strength_default_value(0.0)
+            emission_strength_input = bdsf_node.get_input_emission_strength()
+            if emission_strength_input is not None:
+                links.new(vertex_color_material_node.get_output_alpha(), emission_strength_input)
             links.new(vertex_color_node.get_output(), bdsf_node.get_input_emission_color())
         links.new(vertex_color_node.get_output(), bdsf_node.get_input_base_color())
         return [vertex_color_mat]
@@ -1706,7 +1724,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 links = mat.node_tree.links
                 bdsf_node = PrincipledBSDFNodeProxy(nodes)
                 mat_output_node = MaterialOutputNodeProxy(nodes)
-                color = model.get_color(color_index)
+                color = model.get_color_linear(color_index)
                 bdsf_node.get_input_base_color().default_value = color
                 if self.import_material_props:
                     bdsf_node.get_input_roughness().default_value = material.roughness
@@ -1756,7 +1774,6 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         links.new(color_texture_node.get_output(), bdsf_node.get_input_base_color())
         if self.import_material_props:
             links.new(color_texture_node.get_output(), bdsf_node.get_input_emission_color())
-            bdsf_node.set_input_emission_strength_default_value(0.0)
             mat_texture = bpy.data.images.new(collection_name + " Material Texture", width=256, height=1)
             mat_texture.colorspace_settings.name = "Non-Color"
             for color_index in range(len(model.color_palette)):
@@ -1765,7 +1782,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 mat_texture.pixels[pixel_index] = material.roughness
                 mat_texture.pixels[pixel_index + 1] = material.metallic
                 mat_texture.pixels[pixel_index + 2] = material.ior
-                mat_texture.pixels[pixel_index + 3] = 1.0
+                mat_texture.pixels[pixel_index + 3] = material.emission
             mat_texture_node = TexImageNodeProxy(nodes)
             mat_texture_node.node.image = mat_texture
             mat_texture_node.node.interpolation = "Closest"
@@ -1774,6 +1791,9 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             links.new(separate_rgb_node.get_output_red(), bdsf_node.get_input_roughness())
             links.new(separate_rgb_node.get_output_green(), bdsf_node.get_input_metallic())
             links.new(separate_rgb_node.get_output_blue(), bdsf_node.get_input_ior())
+            emission_strength_input = bdsf_node.get_input_emission_strength()
+            if emission_strength_input is not None:
+                links.new(mat_texture_node.get_output_alpha(), emission_strength_input)
         return [mat]
 
     def execute(self, context):
@@ -1964,7 +1984,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                 new_mesh.vertex_colors[1].name = "Mat"
                                 vertex_colors_mat = new_mesh.vertex_colors[1].data
                                 material = result.materials[color_index]
-                                mat_color = (material.roughness, material.metallic, material.ior, 0.0)
+                                mat_color = (material.roughness, material.metallic, material.ior, material.emission)
                                 for i in range(len(faces) * 4):
                                     vertex_colors_mat[i].color = mat_color
                         elif self.material_mode == "MAT_AS_TEX":
@@ -2043,7 +2063,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             vertex_colors[vertex_offset + 3].color = color
                             if vertex_colors_mat is not None:
                                 material = result.materials[quads[i].color]
-                                mat_color = (material.roughness, material.metallic, material.ior, 0.0)
+                                mat_color = (material.roughness, material.metallic, material.ior, material.emission)
                                 vertex_colors_mat[vertex_offset].color = mat_color
                                 vertex_colors_mat[vertex_offset + 1].color = mat_color
                                 vertex_colors_mat[vertex_offset + 2].color = mat_color
