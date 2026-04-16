@@ -42,7 +42,7 @@ import math
 import mathutils
 import struct
 from functools import cmp_to_key
-from typing import IO, List, Dict, Tuple, Set
+from typing import IO, List, Dict, Tuple, Set, Any
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -715,7 +715,7 @@ class OctreeBranchNode(OctreeNode):
 
 class OctreeLeafNode(OctreeNode):
     def __init__(self, parent: Octree, start_position_x: int, start_position_y: int, start_position_z: int,
-                 default_value: any):
+                 default_value: Any):
         OctreeNode.__init__(self, parent, start_position_x, start_position_y, start_position_z, SideLength,
                             default_value)
         parent.leafs.append(self)
@@ -724,7 +724,7 @@ class OctreeLeafNode(OctreeNode):
         self._x_axis_counts: List[int] = [0] * SideLength
         self._y_axis_counts: List[int] = [0] * SideLength
         self._z_axis_counts: List[int] = [0] * SideLength
-        self.grid: List[any] = [None] * GridLength
+        self.grid: List[Any] = [None] * GridLength
         self.grid_taken: List[bool] = [False] * GridLength
 
     def _get_index(self, x: int, y: int, z: int) -> int:
@@ -856,7 +856,7 @@ class OctreeIterator:
         self._has_current = False
         self._next_inside_leaf_index = 0
         self._next_leaf_index = 0
-        self._current: Tuple[int, int, int, any] = (0, 0, 0, None)
+        self._current: Tuple[int, int, int, Any] = (0, 0, 0, None)
 
     @property
     def current(self):
