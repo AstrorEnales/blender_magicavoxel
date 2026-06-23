@@ -37,6 +37,7 @@ https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox-
 import io
 import time
 import bpy
+import bmesh
 import os
 import math
 import mathutils
@@ -1622,6 +1623,209 @@ class PrincipledBSDFNodeProxy(ShaderNodeProxy):
         return self.node.inputs[self.input_transmission_weight_key]
 
 
+def _split_t_junctions(bm, eps, cell_size):
+    """
+    Split any edge that a non-endpoint vertex lies on (axis-aligned only),
+    inserting a vertex coincident with the stray one, so the surface becomes
+    watertight / manifold. Uses a spatial hash over edges for speed and iterates
+    because each split creates new edges.
+
+    `cell_size` must be derived from the actual mesh spacing (e.g. the shortest
+    edge), not assumed to be 1.0, or a mesh authored at a small voxel size would
+    collapse every vertex into a single hash bucket and nothing would be found.
+
+    Returns the number of edge splits performed.
+    """
+    if cell_size <= 0:
+        cell_size = 1.0
+
+    def on_segment(p, a, b):
+        # Axis-aligned edge: exactly one coordinate varies.
+        dx, dy, dz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+        comps = (abs(dx) > eps, abs(dy) > eps, abs(dz) > eps)
+        if sum(comps) != 1:
+            return None
+        axis = comps.index(True)
+        for o in (i for i in (0, 1, 2) if i != axis):
+            if abs(p[o] - a[o]) > eps:
+                return None
+        av, bv, pv = a[axis], b[axis], p[axis]
+        lo, hi = (av, bv) if av < bv else (bv, av)
+        if pv <= lo + eps or pv >= hi - eps:
+            return None
+        d = b[axis] - a[axis]
+        if abs(d) < eps:
+            return None
+        return (p[axis] - a[axis]) / d
+
+    def key_for(co):
+        return (int(round(co[0] / cell_size)),
+                int(round(co[1] / cell_size)),
+                int(round(co[2] / cell_size)))
+
+    bm.verts.ensure_lookup_table()
+    bm.edges.ensure_lookup_table()
+
+    # Loop layers (UVs, vertex colours) must be interpolated manually onto the
+    # vertices we insert: bmesh.utils.edge_split does NOT carry custom loop data
+    # to the new loops, it leaves them at zero -- which would collapse the packed
+    # per-quad UV islands onto the (0,0) corner. Gather the layers once up front.
+    uv_layers = list(bm.loops.layers.uv.values())
+    col_layers = list(bm.loops.layers.color.values())
+    if hasattr(bm.loops.layers, "float_color"):
+        col_layers += list(bm.loops.layers.float_color.values())
+
+    splits = 0
+    safety = 0
+    while True:
+        safety += 1
+        if safety > 100000:
+            break
+
+        # Build a spatial hash of edges, registering each edge in every cell
+        # along its (axis-aligned) span so a stray vert anywhere on it is found.
+        cell = {}
+        for e in bm.edges:
+            a, b = e.verts
+            x0, y0, z0 = key_for(a.co)
+            x1, y1, z1 = key_for(b.co)
+            if x0 == x1 and y0 == y1:
+                lo, hi = (z0, z1) if z0 < z1 else (z1, z0)
+                for zc in range(lo, hi + 1):
+                    cell.setdefault((x0, y0, zc), []).append(e)
+            elif x0 == x1 and z0 == z1:
+                lo, hi = (y0, y1) if y0 < y1 else (y1, y0)
+                for yc in range(lo, hi + 1):
+                    cell.setdefault((x0, yc, z0), []).append(e)
+            elif y0 == y1 and z0 == z1:
+                lo, hi = (x0, x1) if x0 < x1 else (x1, x0)
+                for xc in range(lo, hi + 1):
+                    cell.setdefault((xc, y0, z0), []).append(e)
+            else:
+                cell.setdefault((x0, y0, z0), []).append(e)
+                cell.setdefault((x1, y1, z1), []).append(e)
+
+        # Find one split to perform.
+        target = None
+        for v in bm.verts:
+            cand = cell.get(key_for(v.co))
+            if not cand:
+                continue
+            for e in cand:
+                if not e.is_valid:
+                    continue
+                a, b = e.verts
+                if a is v or b is v:
+                    continue
+                t = on_segment(v.co, a.co, b.co)
+                if t is not None:
+                    target = (e, a, t, v)
+                    break
+            if target:
+                break
+
+        if not target:
+            break
+
+        e, a, t, v = target
+        b = e.other_vert(a)
+
+        # Snapshot the loop data at both edge endpoints, per adjacent face, so we
+        # can interpolate it onto the inserted loop after the split (edge_split
+        # itself leaves the new loops zeroed).
+        pre = []
+        for f in e.link_faces:
+            la = lb = None
+            for loop in f.loops:
+                if loop.vert is a:
+                    la = loop
+                elif loop.vert is b:
+                    lb = loop
+            if la is None or lb is None:
+                continue
+            uv_vals = [(uvl, la[uvl].uv.copy(), lb[uvl].uv.copy()) for uvl in uv_layers]
+            col_vals = [(cl, tuple(la[cl]), tuple(lb[cl])) for cl in col_layers]
+            pre.append((f, uv_vals, col_vals))
+
+        try:
+            _, new_v = bmesh.utils.edge_split(e, a, t)
+        except (ValueError, RuntimeError):
+            break
+        new_v.co = v.co.copy()
+
+        # Interpolate the snapshotted loop data onto the new loop of each face.
+        for f, uv_vals, col_vals in pre:
+            if not f.is_valid:
+                continue
+            nl = None
+            for loop in f.loops:
+                if loop.vert is new_v:
+                    nl = loop
+                    break
+            if nl is None:
+                continue
+            for uvl, uv_a, uv_b in uv_vals:
+                nl[uvl].uv = uv_a.lerp(uv_b, t)
+            for cl, c_a, c_b in col_vals:
+                nl[cl] = [c_a[k] + (c_b[k] - c_a[k]) * t for k in range(len(c_a))]
+
+        splits += 1
+        bm.verts.ensure_lookup_table()
+        bm.edges.ensure_lookup_table()
+
+    return splits
+
+
+def make_mesh_watertight(mesh):
+    """
+    Make a greedy-meshed VOX model watertight by splitting T-junctions.
+
+    The greedy mesher already shares (welds) coincident vertices, but a large
+    quad's edge can have a smaller neighbour quad's corner sitting partway along
+    it (a T-junction), which leaves the surface non-manifold / not watertight.
+    This splits such edges at the stray vertex, then welds the inserted vertex
+    onto it so the junction becomes a properly shared vertex.
+
+    Must run AFTER UVs are assigned: bmesh.utils.edge_split linearly interpolates
+    the per-loop UVs (and vertex colours) along the split edge. For the planar
+    per-quad UV rectangles that yields exactly the correct UV at the new vertex,
+    and for the single-texel palette UVs it is a no-op, so no UV data is lost.
+
+    Returns the number of edge splits performed.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    if not bm.verts:
+        bm.free()
+        return 0
+
+    # Scale-relative epsilon + spatial-hash cell size, robust to any voxel size.
+    xs = [v.co.x for v in bm.verts]
+    ys = [v.co.y for v in bm.verts]
+    zs = [v.co.z for v in bm.verts]
+    scale = max(max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs), 1e-6)
+    eps = max(scale * 1e-5, 1e-7)
+
+    min_len = None
+    for e in bm.edges:
+        length = e.calc_length()
+        if length > eps and (min_len is None or length < min_len):
+            min_len = length
+    cell_size = (min_len * 0.5) if min_len else max(scale * 1e-3, eps * 8.0)
+
+    splits = _split_t_junctions(bm, eps, cell_size)
+    if splits:
+        # The inserted vertices are coincident with the stray ones; weld them so
+        # the T-junctions become shared (watertight) vertices.
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=eps)
+
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    return splits
+
+
 class ImportVOX(bpy.types.Operator, ImportHelper):
     """Load a MagicaVoxel VOX File"""
     bl_idname = "import_scene.vox"
@@ -1703,6 +1907,15 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         name="Reduce Voxels to Hull",
         description="",
         default=True,
+    )
+
+    fix_t_junctions: BoolProperty(
+        name="Fix T-Junctions (watertight)",
+        description="Split greedy-meshed quad edges where a neighbouring quad's "
+                    "corner sits partway along them, so the surface is watertight "
+                    "/ manifold (useful for 3D printing, booleans and physics). "
+                    "Runs after UV assignment and preserves UVs",
+        default=False,
     )
 
     join_models: BoolProperty(
@@ -1825,6 +2038,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "voxel_size",
                 "voxel_hull",
                 "meshing_type",
+                "fix_t_junctions",
                 "join_models",
                 "max_texture_size",
                 "import_material_props",
@@ -2229,6 +2443,10 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     elif self.material_mode == "MAT_PER_COLOR":
                         for i, face in enumerate(new_mesh.polygons):
                             face.material_index = color_index_material_map[quads[i].color]
+                    if self.fix_t_junctions and self.meshing_type == "GREEDY":
+                        splits = make_mesh_watertight(new_mesh)
+                        if DEBUG_OUTPUT:
+                            print('[DEBUG] watertight pass: %s T-junction split(s)' % splits)
                     new_object = bpy.data.objects.new('import_tmp_model', new_mesh)
                     generated_mesh_models.append(new_object)
                     if DEBUG_OUTPUT:
@@ -2652,6 +2870,8 @@ class VOX_PT_import_geometry(bpy.types.Panel):
         layout.row().prop(operator, "meshing_type")
         if operator.meshing_type in ["CUBES_AS_OBJ", "SIMPLE_CUBES"]:
             layout.row().prop(operator, "voxel_hull")
+        if operator.meshing_type == "GREEDY":
+            layout.row().prop(operator, "fix_t_junctions")
 
 
 class VOX_PT_import_materials(bpy.types.Panel):
