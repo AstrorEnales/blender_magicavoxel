@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.6.0](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.6.0)
+
+  * **[feature]** Add watertight greedy meshing mode
+  * **[feature]** #18 Add option to center object origins based on geometry
+  * **[fix]** #20 Improved socket identifier fallback for shader nodes
+  * **[fix]** #19 Fix emission strength, sRGB conversion, and flux scaling
+
 ## [v1.5.7](https://github.com/AstrorEnales/blender_magicavoxel/releases/tag/v1.5.7)
 
   * **[feature]** #15 Add support for IMAP color palette reordering
