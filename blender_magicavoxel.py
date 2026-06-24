@@ -1778,6 +1778,12 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         default=False,
     )
 
+    center_origins: BoolProperty(
+        name="Center Origins",
+        description="Center object origins by geometry instead of MV object bounds",
+        default=False,
+    )
+
     def create_materials_vertex_colors(self, collection_name: str, _: VoxModel):
         vertex_color_mat = bpy.data.materials.new(name=collection_name + " Material")
         vertex_color_mat.use_nodes = True
@@ -1893,6 +1899,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 "voxel_hull",
                 "meshing_type",
                 "join_models",
+                "center_origins",
                 "max_texture_size",
                 "import_material_props",
             ),
@@ -2352,6 +2359,13 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         bpy.data.objects.remove(model_object)
             if DEBUG_OUTPUT:
                 print('[DEBUG] took %s sec' % (time.time() - timer_start))
+            # =========================================================================================================
+            # Center object origins
+            if self.center_origins:
+                # Make sure parenting, transforms and bounding boxes are evaluated before reading
+                # matrix_world/bound_box below.
+                view_layer.update()
+                self.center_object_origins(list(voxel_collection.objects))
 
         if DEBUG_OUTPUT:
             print('[DEBUG] total time %s sec' % (time.time() - total_timer_start))
@@ -2365,6 +2379,41 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         vertices.append(self.get_vertex_pos(vertex, mesh.grid))
         vertices_map[vertex] = len(vertices) - 1
         return len(vertices) - 1
+
+    @staticmethod
+    def center_object_origins(objects):
+        """
+        Moves each mesh object's origin to the center of its (axis-aligned) bounding box without moving the geometry
+        in world space. Objects whose origin already sits at the center are left untouched. Mesh data shared by several
+        objects (instances) is shifted only once and stays instanced; it is copied only when it is also used by objects
+        outside the given set, so their geometry is not affected.
+        """
+        # Group the mesh objects by the mesh data block they share.
+        groups: Dict[Any, List[Any]] = {}
+        for obj in objects:
+            if obj.type == 'MESH' and obj.data is not None and len(obj.data.vertices) > 0:
+                groups.setdefault(obj.data, []).append(obj)
+        for data, group in groups.items():
+            # bound_box is in local space and identical for all objects sharing the data, so the first object
+            # is representative.
+            local_center = 0.125 * sum(
+                (mathutils.Vector(corner) for corner in group[0].bound_box),
+                mathutils.Vector((0.0, 0.0, 0.0))
+            )
+            # Origin already at the geometry center
+            if local_center.length < 1e-6:
+                continue
+            # Only break instancing when the data is also used by objects outside this set. Otherwise shift the shared
+            # data once and keep it instanced.
+            if data.users > len(group):
+                data = data.copy()
+                for obj in group:
+                    obj.data = data
+            data.transform(mathutils.Matrix.Translation(-local_center))
+            for obj in group:
+                world_matrix = obj.matrix_world.copy()
+                world_matrix.translation = obj.matrix_world @ local_center
+                obj.matrix_world = world_matrix
 
     def recurse_hierarchy(self, voxel_collection, nodes: Dict[int, VoxNode], node: VoxNode, path, path_objects,
                           model_id_object_lookup: Dict):
@@ -2746,6 +2795,7 @@ class VOX_PT_import_geometry(bpy.types.Panel):
         else:
             layout.prop(operator, "import_hierarchy")
         layout.prop(operator, "join_models")
+        layout.prop(operator, "center_origins")
 
         layout.prop(operator, "voxel_size")
         layout.row().prop(operator, "meshing_type")
