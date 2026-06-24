@@ -57,6 +57,12 @@ and applied to each model and no hierarchy parent structure is created.
 This option allows all models in the MagicaVoxel file to be merged into one. Joining is done on a voxel basis and before
 meshing which is superior to just combining the blender meshes for generating the voxel hull and greedy meshing.
 
+### Center Origins
+
+MagicaVoxel object origins are located at the center of the object bounds and always between voxels. That means for
+uneven bounds (for example `5x5x3`) the origin is not at `(2.5, 2.5, 1.5)` but rather at `(2, 2, 1)`. This option
+calculates the object center from the geometry instead and moves the mesh origin at that center in post-processing.
+
 ### Voxel Size
 
 The voxel size parameter can be used to define the unit voxel size. The example below shows a voxel model imported with
