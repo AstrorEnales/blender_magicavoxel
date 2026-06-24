@@ -971,10 +971,7 @@ class Quad:
                  p3: Tuple[int, int, int] = (0, 0, 0),
                  p4: Tuple[int, int, int] = (0, 0, 0),
                  normal: Tuple[int, int, int] = (0, 0, 0),
-                 color: int = 0,
-                 width: int = 1,
-                 height: int = 1,
-                 vertex_indices: Tuple[int, int, int, int] = (3, 2, 0, 1)
+                 color: int = 0
                  ):
         self.p1 = p1
         self.p2 = p2
@@ -982,9 +979,15 @@ class Quad:
         self.p4 = p4
         self.normal = normal
         self.color = color
-        self.width = width
-        self.height = height
-        self.vertex_indices = vertex_indices  # tl,tr,bl,br
+        self.width = 1
+        self.height = 1
+        # Additional vertices lying on the quad edges. Greedy meshing merges
+        # coplanar voxel faces into larger quads which leaves T-junctions where a
+        # corner of a neighboring quad falls onto the edge of this quad. Those
+        # corners are remembered here so the quad can be turned into a watertight
+        # face. edge_vertices[i] holds the points found strictly between corner i
+        # and corner (i + 1) % 4, ordered from corner i towards corner (i + 1) % 4.
+        self.edge_vertices: List[List[Tuple[int, int, int]]] = [[], [], [], []]
 
     def __getitem__(self, i):
         if i == 0:
@@ -994,6 +997,19 @@ class Quad:
         if i == 2:
             return self.p3
         return self.p4
+
+    def get_loop(self) -> List[Tuple[int, int, int]]:
+        """
+        Returns the quad perimeter as an ordered list of points following the
+        p1 -> p2 -> p3 -> p4 (counter-clockwise) winding, with any additional
+        edge vertices inserted in between. For a quad without edge vertices this
+        is simply [p1, p2, p3, p4].
+        """
+        loop: List[Tuple[int, int, int]] = []
+        for i in range(4):
+            loop.append(self[i])
+            loop.extend(self.edge_vertices[i])
+        return loop
 
 
 class SimpleQuadsMeshing:
@@ -1009,22 +1025,22 @@ class SimpleQuadsMeshing:
             xn, xp, yn, yp, zn, zp = x - 1, x + 1, y - 1, y + 1, z - 1, z + 1
             # Left
             if ignore_neighbours or (xn, y, z) in outside:
-                quads.append(Quad((x, yp, z), (x, y, z), (x, y, zp), (x, yp, zp), (-1, 0, 0), color_index, 1, 1))
+                quads.append(Quad((x, yp, z), (x, y, z), (x, y, zp), (x, yp, zp), (-1, 0, 0), color_index))
             # Right
             if ignore_neighbours or (xp, y, z) in outside:
-                quads.append(Quad((xp, y, z), (xp, yp, z), (xp, yp, zp), (xp, y, zp), (1, 0, 0), color_index, 1, 1))
+                quads.append(Quad((xp, y, z), (xp, yp, z), (xp, yp, zp), (xp, y, zp), (1, 0, 0), color_index))
             # Back
             if ignore_neighbours or (x, yn, z) in outside:
-                quads.append(Quad((x, y, z), (xp, y, z), (xp, y, zp), (x, y, zp), (0, -1, 0), color_index, 1, 1))
+                quads.append(Quad((x, y, z), (xp, y, z), (xp, y, zp), (x, y, zp), (0, -1, 0), color_index))
             # Front
             if ignore_neighbours or (x, yp, z) in outside:
-                quads.append(Quad((xp, yp, z), (x, yp, z), (x, yp, zp), (xp, yp, zp), (0, 1, 0), color_index, 1, 1))
+                quads.append(Quad((xp, yp, z), (x, yp, z), (x, yp, zp), (xp, yp, zp), (0, 1, 0), color_index))
             # Bottom
             if ignore_neighbours or (x, y, zn) in outside:
-                quads.append(Quad((xp, y, z), (x, y, z), (x, yp, z), (xp, yp, z), (0, 0, -1), color_index, 1, 1))
+                quads.append(Quad((xp, y, z), (x, y, z), (x, yp, z), (xp, yp, z), (0, 0, -1), color_index))
             # Top
             if ignore_neighbours or (x, y, zp) in outside:
-                quads.append(Quad((x, y, zp), (xp, y, zp), (xp, yp, zp), (x, yp, zp), (0, 0, 1), color_index, 1, 1))
+                quads.append(Quad((x, y, zp), (xp, y, zp), (xp, yp, zp), (x, yp, zp), (0, 0, 1), color_index))
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return quads
@@ -1032,7 +1048,7 @@ class SimpleQuadsMeshing:
 
 class GreedyMeshing:
     @staticmethod
-    def generate_mesh(voxels: Octree, outside: Set[Tuple[int, int, int]], ignore_color: bool = False) -> List[Quad]:
+    def generate_mesh(voxels: Octree, outside: Set[Tuple[int, int, int]], ignore_color: bool, watertight: bool) -> List[Quad]:
         if DEBUG_OUTPUT:
             print('[DEBUG] GreedyMeshing generate_mesh')
         timer_start = time.time()
@@ -1043,7 +1059,59 @@ class GreedyMeshing:
         GreedyMeshing.mesh_axis(bounds, voxels, outside, ignore_color, 2, quads)
         if DEBUG_OUTPUT:
             print('[DEBUG] took %s sec' % (time.time() - timer_start))
+        if watertight:
+            if DEBUG_OUTPUT:
+                print('[DEBUG] GreedyMeshing generate_mesh watertight')
+            timer_start = time.time()
+            GreedyMeshing.insert_edge_vertices(quads)
+            if DEBUG_OUTPUT:
+                print('[DEBUG] took %s sec' % (time.time() - timer_start))
         return quads
+
+    @staticmethod
+    def insert_edge_vertices(quads: List[Quad]):
+        """
+        Removes the T-junctions left behind by greedy meshing so the resulting
+        mesh becomes watertight. Wherever a corner of one quad lies on the edge
+        of another quad, that point is registered as an additional edge vertex of
+        the larger quad. When the quads are later turned into faces, these shared
+        vertices split the long edge to match the neighboring quads, closing the
+        crack.
+        """
+        # A point can only be a T-junction on some edge if it is a corner of at
+        # least one quad, so gather every corner up front for fast lookup.
+        corners: Set[Tuple[int, int, int]] = set()
+        for quad in quads:
+            corners.add(quad.p1)
+            corners.add(quad.p2)
+            corners.add(quad.p3)
+            corners.add(quad.p4)
+        for quad in quads:
+            for i in range(4):
+                quad.edge_vertices[i] = GreedyMeshing.collect_edge_vertices(
+                    quad[i], quad[(i + 1) % 4], corners
+                )
+
+    @staticmethod
+    def collect_edge_vertices(a: Tuple[int, int, int], b: Tuple[int, int, int],
+                              corners: Set[Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+        """
+        Returns all corner points lying strictly between the axis-aligned edge
+        endpoints a and b, ordered from a towards b.
+        """
+        # Quad edges are always axis-aligned, so exactly one coordinate varies.
+        axis = 0 if a[0] != b[0] else (1 if a[1] != b[1] else 2)
+        step = 1 if b[axis] > a[axis] else -1
+        result: List[Tuple[int, int, int]] = []
+        point = list(a)
+        coord = a[axis] + step
+        while coord != b[axis]:
+            point[axis] = coord
+            candidate = (point[0], point[1], point[2])
+            if candidate in corners:
+                result.append(candidate)
+            coord += step
+        return result
 
     @staticmethod
     def mesh_axis(bounds: Tuple[int, int, int, int, int, int], voxels: Octree, outside: Set[Tuple[int, int, int]],
@@ -1056,7 +1124,7 @@ class GreedyMeshing:
         axis2_size = axis_sizes[axis2_index]
 
         get_vector = GreedyMeshing.get_vector_func(bounds, axis_index, axis1_index, axis2_index)
-        normals: List[Tuple[float, float, float]] = [
+        normals: List[Tuple[int, int, int]] = [
             (
                 -1 if axis_index == 0 else 0,
                 -1 if axis_index == 1 else 0,
@@ -1146,9 +1214,7 @@ class GreedyMeshing:
                                         visited[visited_index][i * axis2_size + j] = True
                                 # Store quad
                                 a_visited = a if visited_index == 0 else a + 1
-                                quad = Quad()
-                                quad.normal = normals[visited_index]
-                                quad.color = start_voxel
+                                quad = Quad(normal=normals[visited_index], color=start_voxel)
                                 p1 = get_vector(a_visited, b, c)
                                 p2 = get_vector(a_visited, end_index_axis1 + 1, c)
                                 p3 = get_vector(a_visited, b, end_index_axis2 + 1)
@@ -1693,7 +1759,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             ("CUBES_AS_OBJ", "Voxel as Models (Slow)", "Each Voxel as an individual cube object"),
             ("SIMPLE_CUBES", "Simple Cubes", "Each Voxel as a cube in one mesh"),
             ("SIMPLE_QUADS", "Simple Quads", "Outside facing Voxel faces as quads in one mesh"),
-            ("GREEDY", "Greedy", "Outside facing Voxel faces greedy optimized in one mesh")
+            ("GREEDY", "Greedy", "Outside facing Voxel faces greedy optimized in one mesh"),
+            ("GREEDY_WATERTIGHT", "Greedy (Watertight)", "Outside facing Voxel faces greedy optimized in one mesh (Watertight)")
         ],
         description="",
         default="SIMPLE_QUADS"
@@ -1831,7 +1898,7 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
             ),
         )
 
-        if self.material_mode == "TEXTURED_MODEL" and self.meshing_type not in ["GREEDY"]:
+        if self.material_mode == "TEXTURED_MODEL" and self.meshing_type not in ["GREEDY", "GREEDY_WATERTIGHT"]:
             self.report({"WARNING"}, "Selected 'Textured Models (UV unwrap)' material mode without greedy meshing.")
             self.meshing_type = "SIMPLE_QUADS"
 
@@ -2026,10 +2093,11 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 # Other meshing types
                 # =====================================================
                 else:
-                    if self.meshing_type == "GREEDY":
+                    if self.meshing_type == "GREEDY" or self.meshing_type == "GREEDY_WATERTIGHT":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
                         ignore_color = self.material_mode in ["NONE", "TEXTURED_MODEL"]
-                        quads = GreedyMeshing.generate_mesh(mesh.voxels, outside, ignore_color)
+                        quads = GreedyMeshing.generate_mesh(mesh.voxels, outside, ignore_color,
+                                                            self.meshing_type == "GREEDY_WATERTIGHT")
                     elif self.meshing_type == "SIMPLE_QUADS":
                         mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
                         quads = SimpleQuadsMeshing.generate_mesh(mesh.voxels, outside, False)
@@ -2045,14 +2113,23 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                     timer_start = time.time()
                     vertices_map: Dict[Tuple[int, int, int], int] = {}
                     vertices: List[Tuple[float, float, float]] = []
+                    # A quad becomes a single face built from its CCW loop. The
+                    # loop holds the four corners plus any additional edge
+                    # vertices (watertight greedy meshing), so faces may have more
+                    # than four vertices. loop_offsets[i] is the index of the
+                    # first loop/corner of quad i within the per-loop data layers.
+                    quad_loops = [quad.get_loop() for quad in quads]
+                    loop_offsets: List[int] = []
+                    loop_offset = 0
+                    for loop in quad_loops:
+                        loop_offsets.append(loop_offset)
+                        loop_offset += len(loop)
                     faces = [
                         [
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p1, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p2, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p3, mesh),
-                            self.get_or_create_vertex(vertices_map, vertices, quad.p4, mesh)
+                            self.get_or_create_vertex(vertices_map, vertices, point, mesh)
+                            for point in loop
                         ]
-                        for quad in quads
+                        for loop in quad_loops
                     ]
                     new_mesh = bpy.data.meshes.new(mesh_name)
                     new_mesh.from_pydata(vertices, [], faces)
@@ -2075,28 +2152,24 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                             new_mesh.vertex_colors[1].name = "Mat"
                             vertex_colors_mat = new_mesh.vertex_colors[1].data
                         for i in range(len(quads)):
-                            vertex_offset = i * 4
+                            vertex_offset = loop_offsets[i]
+                            loop_len = len(quad_loops[i])
                             color = result.get_color(quads[i].color)
-                            vertex_colors[vertex_offset].color = color
-                            vertex_colors[vertex_offset + 1].color = color
-                            vertex_colors[vertex_offset + 2].color = color
-                            vertex_colors[vertex_offset + 3].color = color
+                            for k in range(loop_len):
+                                vertex_colors[vertex_offset + k].color = color
                             if vertex_colors_mat is not None:
                                 material = result.materials[quads[i].color]
                                 mat_color = (material.roughness, material.metallic, material.ior, material.emission)
-                                vertex_colors_mat[vertex_offset].color = mat_color
-                                vertex_colors_mat[vertex_offset + 1].color = mat_color
-                                vertex_colors_mat[vertex_offset + 2].color = mat_color
-                                vertex_colors_mat[vertex_offset + 3].color = mat_color
+                                for k in range(loop_len):
+                                    vertex_colors_mat[vertex_offset + k].color = mat_color
                     elif self.material_mode == "MAT_AS_TEX":
                         for i in range(len(quads)):
-                            vertex_offset = i * 4
+                            vertex_offset = loop_offsets[i]
+                            loop_len = len(quad_loops[i])
                             # Color index as pixel x position + 0.5 offset for the center of the pixel
                             uv_x = (quads[i].color + 0.5) / 256.0
-                            uv_layer.data[vertex_offset].uv = [uv_x, 0.5]
-                            uv_layer.data[vertex_offset + 1].uv = [uv_x, 0.5]
-                            uv_layer.data[vertex_offset + 2].uv = [uv_x, 0.5]
-                            uv_layer.data[vertex_offset + 3].uv = [uv_x, 0.5]
+                            for k in range(loop_len):
+                                uv_layer.data[vertex_offset + k].uv = [uv_x, 0.5]
                     elif self.material_mode == "TEXTURED_MODEL":
                         packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
                         quad_placements: List[Tuple[int, int]] = []
@@ -2143,36 +2216,62 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                         for i in range(len(quads)):
                             quad = quads[i]
                             x, y = quad_placements[i]
-                            vertex_indices = quad.vertex_indices
-                            vertex_offset = i * 4
+                            vertex_offset = loop_offsets[i]
                             uv_x = x * uv_x_step
                             uv_y = y * uv_y_step
                             uv_right = (x + quad.width) * uv_x_step
                             uv_top = (y + quad.height) * uv_y_step
-                            uv_layer.data[vertex_offset + vertex_indices[0]].uv = [uv_x, uv_top]
-                            uv_layer.data[vertex_offset + vertex_indices[1]].uv = [uv_right, uv_top]
-                            uv_layer.data[vertex_offset + vertex_indices[2]].uv = [uv_x, uv_y]
-                            uv_layer.data[vertex_offset + vertex_indices[3]].uv = [uv_right, uv_y]
+                            # UV of each corner in p1..p4 order (bl, br, tr, tl),
+                            # matching the (3, 2, 0, 1) = (tl, tr, bl, br) layout.
+                            corner_uvs = [
+                                (uv_x, uv_y),        # p1 -> bottom left
+                                (uv_right, uv_y),    # p2 -> bottom right
+                                (uv_right, uv_top),  # p3 -> top right
+                                (uv_x, uv_top),      # p4 -> top left
+                            ]
+                            # Walk the quad loop (corners + edge vertices) in the
+                            # same order get_loop() builds it, assigning the corner
+                            # UVs directly and interpolating the UVs of inserted
+                            # edge vertices along their edge.
+                            loop_index = 0
+                            for ci in range(4):
+                                ca = quad[ci]
+                                cb = quad[(ci + 1) % 4]
+                                ua = corner_uvs[ci]
+                                ub = corner_uvs[(ci + 1) % 4]
+                                uv_layer.data[vertex_offset + loop_index].uv = [ua[0], ua[1]]
+                                loop_index += 1
+                                edge_verts = quad.edge_vertices[ci]
+                                if len(edge_verts) > 0:
+                                    edge_axis = 0 if ca[0] != cb[0] else (1 if ca[1] != cb[1] else 2)
+                                    span = cb[edge_axis] - ca[edge_axis]
+                                    for ev in edge_verts:
+                                        t = (ev[edge_axis] - ca[edge_axis]) / span
+                                        uv_layer.data[vertex_offset + loop_index].uv = [
+                                            ua[0] + (ub[0] - ua[0]) * t,
+                                            ua[1] + (ub[1] - ua[1]) * t,
+                                        ]
+                                        loop_index += 1
                             for iy in range(0, quad.height):
                                 pixel_offset_iy = (y + iy) * packer.actual_packing_area_width
                                 for ix in range(0, quad.width):
                                     if quad.normal[0] != 0:
                                         # y, z
-                                        vx = quad[vertex_indices[0]][0] - (0 if quad.normal[0] < 0 else 1)
-                                        vy = quad[vertex_indices[0]][1] + (ix if quad.normal[0] > 0 else -ix - 1)
-                                        vz = quad[vertex_indices[2]][2] + iy
+                                        vx = quad.p4[0] - (0 if quad.normal[0] < 0 else 1)
+                                        vy = quad.p4[1] + (ix if quad.normal[0] > 0 else -ix - 1)
+                                        vz = quad.p1[2] + iy
                                         color_index = mesh.get_voxel_color_index(vx, vy, vz)
                                     elif quad.normal[1] != 0:
                                         # x, z
-                                        vx = quad[vertex_indices[0]][0] + (ix if quad.normal[1] < 0 else -ix - 1)
-                                        vy = quad[vertex_indices[0]][1] - (0 if quad.normal[1] < 0 else 1)
-                                        vz = quad[vertex_indices[2]][2] + iy
+                                        vx = quad.p4[0] + (ix if quad.normal[1] < 0 else -ix - 1)
+                                        vy = quad.p4[1] - (0 if quad.normal[1] < 0 else 1)
+                                        vz = quad.p1[2] + iy
                                         color_index = mesh.get_voxel_color_index(vx, vy, vz)
                                     else:
                                         # x, y
-                                        vx = quad[vertex_indices[0]][0] + (ix if quad.normal[2] > 0 else -ix - 1)
-                                        vy = quad[vertex_indices[2]][1] + iy
-                                        vz = quad[vertex_indices[0]][2] - (0 if quad.normal[2] < 0 else 1)
+                                        vx = quad.p4[0] + (ix if quad.normal[2] > 0 else -ix - 1)
+                                        vy = quad.p1[1] + iy
+                                        vz = quad.p4[2] - (0 if quad.normal[2] < 0 else 1)
                                         color_index = mesh.get_voxel_color_index(vx, vy, vz)
                                     color = result.get_color(color_index)
                                     color_material = result.materials[color_index]
@@ -2556,8 +2655,8 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
         pass
 
     def post_process_model(model: VoxModel):
-        # To support index-level assumptions (eg. artists using top 16 colors for color/palette cycling,
-        # other ranges for emissive etc), we must ensure the order of colors that the artist sees in the
+        # To support index-level assumptions (e.g. artists using top 16 colors for color/palette cycling,
+        # other ranges for emissive etc.), we must ensure the order of colors that the artist sees in the
         # magicavoxel tool matches the actual index we'll end up using here. Unfortunately, magicavoxel
         # does an unexpected thing when remapping colors in the editor using ctrl+drag within the palette.
         # Instead of remapping all indices in all models, it just keeps track of a display index to actual
@@ -2679,7 +2778,8 @@ class VOX_PT_import_materials(bpy.types.Panel):
         if operator.material_mode != "NONE":
             layout.row().prop(operator, "import_material_props")
         if operator.material_mode == "TEXTURED_MODEL":
-            operator.meshing_type = "GREEDY"
+            if operator.meshing_type != "GREEDY" and operator.meshing_type != "GREEDY_WATERTIGHT":
+                operator.meshing_type = "GREEDY"
             layout.row().label(text="INFO: Locked Greedy meshing for")
             layout.row().label(text="textured models mode.")
             layout.row().prop(operator, "max_texture_size")

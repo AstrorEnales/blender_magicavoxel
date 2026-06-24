@@ -134,10 +134,12 @@ from outside.
 
 ![](img/meshing_type_simple_quads.png)
 
-#### Greedy
+#### Greedy (+Watertight)
 
 Greedy meshing is equivalent to simple quads as it only creates faces of the voxel hull visible from outside, with the
 addition of greedily joining quads where possible.
+Optionally, the "Greedy (Watertight)" mode removes T-junctions by expanding quads to N-gons where other quad vertices
+coincide with a quad edge.
 
 You may read more about greedy
 meshing [here](https://devforum.roblox.com/t/consume-everything-how-greedy-meshing-works/452717)
