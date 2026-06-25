@@ -2101,12 +2101,15 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                 # =====================================================
                 else:
                     if self.meshing_type == "GREEDY" or self.meshing_type == "GREEDY_WATERTIGHT":
-                        mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
+                        # No hull reduction here: greedy and simple-quads meshing only emit faces
+                        # towards the outside set, so fully enclosed interior voxels never produce
+                        # geometry. Reducing to the hull yields an identical mesh and is by far the
+                        # most expensive step on solid models, so it is intentionally skipped.
                         ignore_color = self.material_mode in ["NONE", "TEXTURED_MODEL"]
                         quads = GreedyMeshing.generate_mesh(mesh.voxels, outside, ignore_color,
                                                             self.meshing_type == "GREEDY_WATERTIGHT")
                     elif self.meshing_type == "SIMPLE_QUADS":
-                        mesh.grid.reduce_voxel_grid_to_hull(mesh.voxels, outside)
+                        # See above - interior voxels are never meshed, so hull reduction is skipped.
                         quads = SimpleQuadsMeshing.generate_mesh(mesh.voxels, outside, False)
                     elif self.meshing_type == "SIMPLE_CUBES":
                         if self.voxel_hull:
