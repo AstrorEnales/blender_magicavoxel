@@ -41,7 +41,7 @@ import os
 import math
 import mathutils
 import struct
-from functools import cmp_to_key
+import heapq
 from typing import IO, List, Dict, Tuple, Set, Any
 from bpy.props import (
     StringProperty,
@@ -116,153 +116,165 @@ DEFAULT_PALETTE: List[int] = [
 DEBUG_OUTPUT = False
 
 
+class _SkylineSegment:
+    """A horizontal run of the skyline contour, covering [x, x + width) at height y."""
+    __slots__ = ("x", "width", "y", "prev", "next", "valid")
+
+    def __init__(self, x: int, width: int, y: int):
+        self.x = x
+        self.width = width
+        self.y = y
+        self.prev = None
+        self.next = None
+        self.valid = True
+
+
 class RectanglePacker:
     """
-    Rectangle packer translated from Javier Arevalo
-    https://www.flipcode.com/archives/Rectangle_Placement.shtml
+    Skyline bottom-left rectangle packer backed by a min-heap.
+
+    Rectangles are packed into a strip of fixed width that grows upward. The strip
+    width is derived from the total rectangle area so the result stays roughly
+    square, and it is widened on demand if packing would exceed the maximum texture
+    height. The skyline (the top contour of everything packed so far) is kept as a
+    doubly linked list of horizontal segments; a min-heap keyed by (height, x)
+    returns the lowest segment in O(log n), so packing n rectangles is O(n log n).
     """
 
-    def __init__(self, packing_area_width: int, packing_area_height: int):
-        self.packed_rectangles: List[Tuple[int, int, int, int]] = []
-        self.anchors: List[Tuple[int, int]] = [(0, 0)]
-        self.packing_area_width = packing_area_width
-        self.packing_area_height = packing_area_height
+    def __init__(self, max_width: int, max_height: int):
+        self.max_width = max_width
+        self.max_height = max_height
         self.actual_packing_area_width = 1
         self.actual_packing_area_height = 1
+        self._counter = 0
 
-    @staticmethod
-    def compare_anchor_rank(a: Tuple[int, int], b: Tuple[int, int]) -> int:
-        return a[0] + a[1] - (b[0] + b[1])
-
-    def insert_anchor(self, anchor: Tuple[int, int]):
+    def pack(self, sizes: List[Tuple[int, int]]) -> List[Tuple[int, int]] | None:
         """
-        Inserts a new anchor point into the anchor list.
-        This method tries to keep the anchor list ordered by ranking the anchors depending on the distance from the top
-        left corner in the packing area.
+        Packs all (width, height) rectangles and returns their (x, y) placements in
+        the same order, or None if they do not fit within max_width x max_height.
         """
-        # Find out where to insert the new anchor based on its rank (which is calculated based on the anchor's distance
-        # to the top left corner of the packing area).
-        self.anchors.append(anchor)
-        self.anchors.sort(key=cmp_to_key(RectanglePacker.compare_anchor_rank))
-
-    @staticmethod
-    def rectangles_intersect(a_x: int, a_y: int, a_width: int, a_height: int,
-                             b_x: int, b_y: int, b_width: int, b_height: int) -> bool:
-        return b_x < a_x + a_width and a_x < b_x + b_width and b_y < a_y + a_height and a_y < b_y + b_height
-
-    def is_free(self, rectangle_x: int, rectangle_y: int, rectangle_width: int, rectangle_height: int,
-                tested_packing_area_width: int, tested_packing_area_height: int) -> bool:
-        leaves_packing_area = (rectangle_x < 0
-                               or rectangle_y < 0
-                               or rectangle_x + rectangle_width > tested_packing_area_width
-                               or rectangle_y + rectangle_height > tested_packing_area_height)
-        if leaves_packing_area:
-            return False
-        # Brute-force search whether the rectangle touches any of the other rectangles already in the packing area
-        for index in range(0, len(self.packed_rectangles)):
-            other = self.packed_rectangles[index]
-            if self.rectangles_intersect(other[0], other[1], other[2], other[3], rectangle_x, rectangle_y,
-                                         rectangle_width, rectangle_height):
-                return False
-        return True
-
-    def find_first_free_anchor(self, rectangle_width: int, rectangle_height: int, tested_packing_area_width: int,
-                               tested_packing_area_height: int) -> int:
-        # Walk over all anchors (which are ordered by their distance to the upper left corner of the packing area) until
-        # one is discovered that can house the new rectangle.
-        for index in range(0, len(self.anchors)):
-            if self.is_free(self.anchors[index][0], self.anchors[index][1], rectangle_width, rectangle_height,
-                            tested_packing_area_width, tested_packing_area_height):
-                return index
-        return -1
-
-    def select_anchor_recursive(self, rectangle_width: int, rectangle_height: int,
-                                tested_packing_area_width: int, tested_packing_area_height: int) -> int:
-        """
-        Searches for a free anchor and recursively enlarges the packing area if none can be found.
-        """
-        # Try to locate an anchor point where the rectangle fits in
-        free_anchor_index = self.find_first_free_anchor(rectangle_width, rectangle_height, tested_packing_area_width,
-                                                        tested_packing_area_height)
-        # If the rectangle fits without resizing packing area (any further in case of a recursive call), take over the
-        # new packing area size and return the anchor at which the rectangle can be placed.
-        if free_anchor_index != -1:
-            self.actual_packing_area_width = tested_packing_area_width
-            self.actual_packing_area_height = tested_packing_area_height
-            return free_anchor_index
-        # If we reach this point, the rectangle did not fit in the current packing area and our only choice is to try
-        # and enlarge the packing area. For readability, determine whether the packing area can be enlarged any further
-        # in its width and in its height
-        can_enlarge_width = tested_packing_area_width < self.packing_area_width
-        can_enlarge_height = tested_packing_area_height < self.packing_area_height
-        should_enlarge_height = not can_enlarge_width or tested_packing_area_height < tested_packing_area_width
-        # Try to enlarge the smaller of the two dimensions first (unless the smaller dimension is already at its maximum
-        # size). 'shouldEnlargeHeight' is true when the height was the smaller dimension or when the width is maxed out.
-        if can_enlarge_height and should_enlarge_height:
-            # Try to double the height of the packing area
-            return self.select_anchor_recursive(rectangle_width, rectangle_height, tested_packing_area_width,
-                                                min(tested_packing_area_height * 2, self.packing_area_height))
-        if can_enlarge_width:
-            # Try to double the width of the packing area
-            return self.select_anchor_recursive(rectangle_width, rectangle_height,
-                                                min(tested_packing_area_width * 2, self.packing_area_width),
-                                                tested_packing_area_height)
-        return -1
-
-    def optimize_placement(self, placement: Tuple[int, int], rectangle_width: int, rectangle_height: int) \
-            -> Tuple[int, int]:
-        """
-        Optimizes the rectangle's placement by moving it either left or up to fill any gaps resulting from rectangles
-        blocking the anchors of the most optimal placements.
-        """
-        test_coordinate = placement[0]
-        # Try to move the rectangle to the left as far as possible
-        left_most = placement[0]
-        while self.is_free(test_coordinate, placement[1], rectangle_width, rectangle_height, self.packing_area_width,
-                           self.packing_area_height):
-            left_most = test_coordinate
-            test_coordinate -= 1
-        # Reset rectangle to original position
-        test_coordinate = placement[1]
-        # Try to move the rectangle upwards as far as possible
-        top_most = placement[1]
-        while self.is_free(placement[0], test_coordinate, rectangle_width, rectangle_height, self.packing_area_width,
-                           self.packing_area_height):
-            top_most = test_coordinate
-            test_coordinate -= 1
-        # Use the dimension in which the rectangle could be moved farther
-        if placement[0] - left_most > placement[1] - top_most:
-            return left_most, placement[1]
-        return placement[0], top_most
-
-    def try_pack(self, rectangle_width: int, rectangle_height: int) -> Tuple[int, int] or None:
-        """
-        Tries to allocate space for a rectangle in the packing area.
-        """
-        # Try to find an anchor where the rectangle fits in, enlarging the packing area and repeating the search
-        # recursively until it fits or the maximum allowed size is exceeded.
-        anchor_index = self.select_anchor_recursive(rectangle_width, rectangle_height, self.actual_packing_area_width,
-                                                    self.actual_packing_area_height)
-        # No anchor could be found at which the rectangle did fit in
-        if anchor_index == -1:
+        if len(sizes) == 0:
+            self.actual_packing_area_width = 1
+            self.actual_packing_area_height = 1
+            return []
+        max_rect_width = max(w for w, h in sizes)
+        max_rect_height = max(h for w, h in sizes)
+        if max_rect_width > self.max_width or max_rect_height > self.max_height:
             return None
-        anchor = self.anchors[anchor_index]
-        # Move the rectangle either to the left or to the top until it collides with a neighboring rectangle. This is
-        # done to combat the effect of lining up rectangles with gaps to the left or top of them because the anchor that
-        # would allow placement there has been blocked by another rectangle
-        placement = self.optimize_placement((anchor[0], anchor[1]), rectangle_width, rectangle_height)
-        # Remove the used anchor and add new anchors at the upper right and lower left positions of the new rectangle.
-        # The anchor is only removed if the placement optimization didn't move the rectangle so far that the anchor
-        # isn't blocked anymore
-        blocks_anchor = placement[0] + rectangle_width > anchor[0] and placement[1] + rectangle_height > anchor[1]
-        if blocks_anchor:
-            del self.anchors[anchor_index]
-        # Add new anchors at the upper right and lower left coordinates of the rectangle
-        self.insert_anchor((placement[0] + rectangle_width, placement[1]))
-        self.insert_anchor((placement[0], placement[1] + rectangle_height))
-        # Finally, we can add the rectangle to our packed rectangles list
-        self.packed_rectangles.append((placement[0], placement[1], rectangle_width, rectangle_height))
-        return placement
+        total_area = sum(w * h for w, h in sizes)
+        # Roughly square strip, at least as wide as the widest rectangle.
+        width = min(self.max_width, max(max_rect_width, int(math.ceil(math.sqrt(total_area)))))
+        # Pack the tallest (then widest) rectangles first for a tighter result.
+        order = sorted(range(len(sizes)), key=lambda i: (sizes[i][1], sizes[i][0]), reverse=True)
+        while True:
+            placements, used_width, used_height = self._pack_strip(sizes, order, width)
+            if used_height <= self.max_height:
+                self.actual_packing_area_width = used_width
+                self.actual_packing_area_height = used_height
+                return placements
+            if width >= self.max_width:
+                return None
+            width = min(self.max_width, width * 2)
+
+    def _push(self, heap, segment: "_SkylineSegment"):
+        self._counter += 1
+        heapq.heappush(heap, (segment.y, segment.x, self._counter, segment))
+
+    def _pack_strip(self, sizes: List[Tuple[int, int]], order: List[int], width: int):
+        heap: List[Tuple[int, int, int, "_SkylineSegment"]] = []
+        self._push(heap, _SkylineSegment(0, width, 0))
+        placements: List[Tuple[int, int]] = [(0, 0)] * len(sizes)
+        used_height = 0
+        for index in order:
+            w, h = sizes[index]
+            # Pop the lowest segment, raising any too-narrow valleys, until one fits.
+            while True:
+                segment = heapq.heappop(heap)[3]
+                if not segment.valid:
+                    continue
+                if segment.width >= w:
+                    break
+                self._raise_valley(heap, segment)
+            x, y = segment.x, segment.y
+            placements[index] = (x, y)
+            top = y + h
+            if top > used_height:
+                used_height = top
+            self._place(heap, segment, w, top)
+        used_width = max(placements[i][0] + sizes[i][0] for i in range(len(sizes)))
+        return placements, used_width, used_height
+
+    def _place(self, heap, segment: "_SkylineSegment", w: int, top: int):
+        """Place a rectangle of width w on segment, raising that part up to top."""
+        segment.valid = False
+        raised = _SkylineSegment(segment.x, w, top)
+        raised.prev = segment.prev
+        if segment.prev is not None:
+            segment.prev.next = raised
+        if segment.width > w:
+            remainder = _SkylineSegment(segment.x + w, segment.width - w, segment.y)
+            raised.next = remainder
+            remainder.prev = raised
+            remainder.next = segment.next
+            if segment.next is not None:
+                segment.next.prev = remainder
+            self._insert(heap, remainder)
+        else:
+            raised.next = segment.next
+            if segment.next is not None:
+                segment.next.prev = raised
+        self._insert(heap, raised)
+
+    def _raise_valley(self, heap, segment: "_SkylineSegment"):
+        """segment is too narrow; raise it into its lower neighbor, wasting the gap."""
+        segment.valid = False
+        left, right = segment.prev, segment.next
+        if left is not None and (right is None or left.y <= right.y):
+            left.valid = False
+            merged = _SkylineSegment(left.x, left.width + segment.width, left.y)
+            merged.prev = left.prev
+            merged.next = segment.next
+            if left.prev is not None:
+                left.prev.next = merged
+            if segment.next is not None:
+                segment.next.prev = merged
+        else:
+            right.valid = False
+            merged = _SkylineSegment(segment.x, segment.width + right.width, right.y)
+            merged.prev = segment.prev
+            merged.next = right.next
+            if segment.prev is not None:
+                segment.prev.next = merged
+            if right.next is not None:
+                right.next.prev = merged
+        self._insert(heap, merged)
+
+    def _insert(self, heap, segment: "_SkylineSegment"):
+        """Merge segment with adjacent same-height neighbors, then push it onto the heap."""
+        while segment.prev is not None and segment.prev.valid and segment.prev.y == segment.y:
+            neighbour = segment.prev
+            neighbour.valid = False
+            merged = _SkylineSegment(neighbour.x, neighbour.width + segment.width, segment.y)
+            merged.prev = neighbour.prev
+            merged.next = segment.next
+            if neighbour.prev is not None:
+                neighbour.prev.next = merged
+            if segment.next is not None:
+                segment.next.prev = merged
+            segment = merged
+        while segment.next is not None and segment.next.valid and segment.next.y == segment.y:
+            neighbour = segment.next
+            neighbour.valid = False
+            merged = _SkylineSegment(segment.x, segment.width + neighbour.width, segment.y)
+            merged.prev = segment.prev
+            merged.next = neighbour.next
+            if segment.prev is not None:
+                segment.prev.next = merged
+            if neighbour.next is not None:
+                neighbour.next.prev = merged
+            segment = merged
+        segment.valid = True
+        self._push(heap, segment)
 
 
 ChildXnYnZn = 0
@@ -291,7 +303,7 @@ GridLength = SideLength * SideLength * SideLength
 
 
 class Octree:
-    def __init__(self, size: int = 8, default_value: any = None):
+    def __init__(self, size: int = 8, default_value: Any = None):
         self.size = 2 ** (max(8, size) - 1).bit_length()
         self.size_half = self.size >> 1
         self.default_value = default_value
@@ -319,7 +331,7 @@ class Octree:
     def not_empty_bounds(self) -> Tuple[int, int, int, int, int, int]:
         return self._root.not_empty_bounds
 
-    def get_value(self, x: int, y: int, z: int) -> any:
+    def get_value(self, x: int, y: int, z: int) -> Any:
         return self.default_value if self.is_outside(x, y, z) else self._root.get_value(x, y, z)
 
     def contains(self, x: int, y: int, z: int) -> bool:
@@ -334,7 +346,7 @@ class Octree:
         return (x < self.size_half and x >= -self.size_half and y < self.size_half and y >= -self.size_half
                 and z < self.size_half and z >= -self.size_half)
 
-    def add(self, x: int, y: int, z: int, value: any):
+    def add(self, x: int, y: int, z: int, value: Any):
         while self.is_outside(x, y, z):
             self._expand()
         self._root.add(x, y, z, value)
@@ -512,7 +524,7 @@ class Octree:
 
 class OctreeNode:
     def __init__(self, parent: Octree, start_position_x: int, start_position_y: int, start_position_z: int, size: int,
-                 default_value: any):
+                 default_value: Any):
         self.parent = parent
         self.start_position_x = start_position_x
         self.start_position_y = start_position_y
@@ -554,13 +566,13 @@ class OctreeNode:
     def is_not_empty(self) -> bool:
         return self.bounds_set
 
-    def get_value(self, x: int, y: int, z: int) -> any:
+    def get_value(self, x: int, y: int, z: int) -> Any:
         pass
 
     def contains(self, x: int, y: int, z: int) -> bool:
         pass
 
-    def add(self, x: int, y: int, z: int, value: any) -> bool:
+    def add(self, x: int, y: int, z: int, value: Any) -> bool:
         pass
 
     def remove(self, x: int, y: int, z: int) -> bool:
@@ -569,7 +581,7 @@ class OctreeNode:
 
 class OctreeBranchNode(OctreeNode):
     def __init__(self, parent: Octree, start_position_x: int, start_position_y: int, start_position_z: int, size: int,
-                 default_value: any):
+                 default_value: Any):
         OctreeNode.__init__(self, parent, start_position_x, start_position_y, start_position_z, size, default_value)
         self._max_count = ((SideLength * 2) ** (math.log2(size) - 2)) * GridLength
         self._center_x = start_position_x + self.size_half
@@ -593,7 +605,7 @@ class OctreeBranchNode(OctreeNode):
     def _get_index(self, x: int, y: int, z: int) -> int:
         return (x >= self._center_x) + (y >= self._center_y) * 2 + (z >= self._center_z) * 4
 
-    def get_value(self, x: int, y: int, z: int) -> any:
+    def get_value(self, x: int, y: int, z: int) -> Any:
         child = self.child_nodes[self._get_index(x, y, z)]
         return child.get_value(x, y, z) if child is not None else self.default_value
 
@@ -601,7 +613,7 @@ class OctreeBranchNode(OctreeNode):
         child = self.child_nodes[self._get_index(x, y, z)]
         return child is not None and child.contains(x, y, z)
 
-    def add(self, x: int, y: int, z: int, value: any) -> bool:
+    def add(self, x: int, y: int, z: int, value: Any) -> bool:
         node_index = self._get_index(x, y, z)
         node = self.child_nodes[node_index]
         if node is None:
@@ -746,14 +758,14 @@ class OctreeLeafNode(OctreeNode):
     def count(self) -> int:
         return self._count
 
-    def get_value(self, x: int, y: int, z: int) -> any:
+    def get_value(self, x: int, y: int, z: int) -> Any:
         index = self._get_index(x, y, z)
         return self.grid[index] if self.grid_taken[index] else self.default_value
 
     def contains(self, x: int, y: int, z: int) -> bool:
         return self.grid_taken[self._get_index(x, y, z)]
 
-    def add(self, x: int, y: int, z: int, value: any) -> bool:
+    def add(self, x: int, y: int, z: int, value: Any) -> bool:
         if not self.bounds_set:
             self.min_x = x
             self.min_y = y
@@ -1345,7 +1357,7 @@ class VoxMesh:
         self.used_color_indices: Set[int] = set()
         self.node_id = -1
 
-    def get_voxel_color_index(self, x: int, y: int, z: int) -> int or None:
+    def get_voxel_color_index(self, x: int, y: int, z: int) -> int | None:
         return self.voxels.get_value(x, y, z)
 
 
@@ -2182,34 +2194,13 @@ class ImportVOX(bpy.types.Operator, ImportHelper):
                                 uv_layer.data[vertex_offset + k].uv = [uv_x, 0.5]
                     elif self.material_mode == "TEXTURED_MODEL":
                         packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
-                        quad_placements: List[Tuple[int, int]] = []
                         if DEBUG_OUTPUT:
                             print('[DEBUG] finding texture space for', len(quads), 'quads')
-                        # The performance of the rectangle packer rapidly degrades after ~1500 quads. Therefore,
-                        # split the number of quads into sub-packing tasks for more than 1000 quads
-                        quad_split_size = 500 if len(quads) > 1000 else len(quads)
-                        for i in range(0, math.ceil(len(quads) / quad_split_size)):
-                            sub_packer = RectanglePacker(self.max_texture_size, self.max_texture_size)
-                            sub_quad_placements = []
-                            for j in range(i * quad_split_size, min(len(quads), (i + 1) * quad_split_size)):
-                                quad = quads[j]
-                                quad_placement = sub_packer.try_pack(quad.width, quad.height)
-                                if quad_placement is None:
-                                    self.report({"WARNING"},
-                                                "Failed to unwrap all mesh faces onto texture. Consider increasing max texture size")
-                                    return {"CANCELLED"}
-                                sub_quad_placements.append((quad_placement[0], quad_placement[1]))
-
-                            sub_pack_placement = packer.try_pack(sub_packer.actual_packing_area_width,
-                                                                 sub_packer.actual_packing_area_height)
-                            if sub_pack_placement is None:
-                                self.report({"WARNING"},
-                                            "Failed to unwrap all mesh faces onto texture. Consider increasing max texture size")
-                                return {"CANCELLED"}
-                            quad_placements.extend([
-                                (p[0] + sub_pack_placement[0], p[1] + sub_pack_placement[1])
-                                for p in sub_quad_placements
-                            ])
+                        quad_placements = packer.pack([(quad.width, quad.height) for quad in quads])
+                        if quad_placements is None:
+                            self.report({"WARNING"},
+                                        "Failed to unwrap all mesh faces onto texture. Consider increasing max texture size")
+                            return {"CANCELLED"}
                         pixel_size = packer.actual_packing_area_width * packer.actual_packing_area_height
                         if DEBUG_OUTPUT:
                             print('[DEBUG] quads fit into pixel size', packer.actual_packing_area_width, 'x',
